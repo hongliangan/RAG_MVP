@@ -1,0 +1,12 @@
+[project]
+name = "rag_project"
+version = "0.1.0"
+dependencies = [
+    "sentence-transformers",
+    "chromadb",
+    "google-generativeai",
+    "openai"
+]
+
+[tool.setuptools]
+packages = find:
