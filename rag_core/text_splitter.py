@@ -21,6 +21,35 @@ class TextSplitter:
         self.config = config or get_text_chunk_config()
         self.split_method = self.config.get("split_method", "paragraph")
         
+        # 确保数值类型参数被正确转换
+        self._normalize_config()
+        
+    def _normalize_config(self):
+        """
+        标准化配置参数，确保数值类型正确
+        """
+        # 字符数切片参数
+        if "chunk_size" in self.config:
+            self.config["chunk_size"] = int(self.config["chunk_size"])
+        if "chunk_overlap" in self.config:
+            self.config["chunk_overlap"] = int(self.config["chunk_overlap"])
+            
+        # 句子切片参数
+        if "max_sentences_per_chunk" in self.config:
+            self.config["max_sentences_per_chunk"] = int(self.config["max_sentences_per_chunk"])
+            
+        # 段落切片参数
+        if "min_paragraph_length" in self.config:
+            self.config["min_paragraph_length"] = int(self.config["min_paragraph_length"])
+        if "max_paragraph_length" in self.config:
+            self.config["max_paragraph_length"] = int(self.config["max_paragraph_length"])
+            
+        # 通用过滤参数
+        if "min_chunk_length" in self.config:
+            self.config["min_chunk_length"] = int(self.config["min_chunk_length"])
+        if "max_chunk_length" in self.config:
+            self.config["max_chunk_length"] = int(self.config["max_chunk_length"])
+            
     def split_text(self, text: str) -> List[str]:
         """
         根据配置的切片方式分割文本

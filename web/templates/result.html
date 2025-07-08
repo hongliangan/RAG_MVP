@@ -5,6 +5,19 @@
     <title>RAG MVP - 结果展示</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        .config-info {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .config-info h5 {
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+    </style>
 </head>
 <body class="container py-5">
     <h1 class="mb-4">RAG MVP - 结果展示</h1>
@@ -18,28 +31,51 @@
         <strong>最终答案：</strong>
         <div class="alert alert-info">{{ answer }}</div>
     </div>
-    <div class="container mt-4">
-        <h4>本次文本切片参数</h4>
-        <ul>
-            <li>切片方式：{{ chunk_config.split_method }}</li>
-            {% if chunk_config.split_method == 'character' %}
-                <li>每块最大字符数：{{ chunk_config.chunk_size }}</li>
-                <li>重叠字符数：{{ chunk_config.chunk_overlap }}</li>
-            {% elif chunk_config.split_method == 'sentence' %}
-                <li>每块最大句子数：{{ chunk_config.max_sentences_per_chunk }}</li>
-            {% elif chunk_config.split_method == 'paragraph' %}
-                <li>最小段落长度：{{ chunk_config.min_paragraph_length }}</li>
-                <li>最大段落长度：{{ chunk_config.max_paragraph_length }}</li>
-            {% endif %}
-        </ul>
-    </div>
-    <div class="mb-4">
-        <h4>RAG处理进度</h4>
-        <div class="progress" style="height: 30px;">
-            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 100%">
-                全部完成
+
+    <!-- 配置信息展示 -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="config-info">
+                <h5>✂️ 文本切片配置</h5>
+                <ul class="list-unstyled">
+                    <li><strong>切片方式：</strong>{{ chunk_config.split_method }}</li>
+                    {% if chunk_config.split_method == 'character' %}
+                        <li><strong>每块最大字符数：</strong>{{ chunk_config.chunk_size }}</li>
+                        <li><strong>重叠字符数：</strong>{{ chunk_config.chunk_overlap }}</li>
+                    {% elif chunk_config.split_method == 'sentence' %}
+                        <li><strong>每块最大句子数：</strong>{{ chunk_config.max_sentences_per_chunk }}</li>
+                    {% elif chunk_config.split_method == 'paragraph' %}
+                        <li><strong>最小段落长度：</strong>{{ chunk_config.min_paragraph_length }}</li>
+                        <li><strong>最大段落长度：</strong>{{ chunk_config.max_paragraph_length }}</li>
+                    {% endif %}
+                </ul>
             </div>
         </div>
+        <div class="col-md-6">
+            <div class="config-info">
+                <h5>🔍 检索配置</h5>
+                <ul class="list-unstyled">
+                    <li><strong>返回片段数：</strong>{{ retrieval_params.top_k }}</li>
+                    <li><strong>相似度阈值：</strong>{{ retrieval_params.similarity_threshold }}</li>
+                    <li><strong>检索策略：</strong>{{ retrieval_params.retrieval_strategy }}</li>
+                    <li><strong>上下文窗口：</strong>{{ retrieval_params.context_window }}</li>
+                    <li><strong>去重策略：</strong>{{ "启用" if retrieval_params.deduplication else "禁用" }}</li>
+                    {% if retrieval_params.weight_config.length_weight %}
+                        <li><strong>长度权重：</strong>{{ retrieval_params.weight_config.length_weight }}</li>
+                    {% endif %}
+                    {% if retrieval_params.weight_config.position_weight %}
+                        <li><strong>位置权重：</strong>{{ retrieval_params.weight_config.position_weight }}</li>
+                    {% endif %}
+                    {% if retrieval_params.weight_config.keyword_weight %}
+                        <li><strong>关键词权重：</strong>{{ retrieval_params.weight_config.keyword_weight|join(', ') }}</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <h4>处理结果统计</h4>
         <ul class="mt-3">
             <li>文档加载：共 <strong>{{ doc_chunks|length }}</strong> 段</li>
             <li>向量化：共 <strong>{{ embeddings|length }}</strong> 向量</li>

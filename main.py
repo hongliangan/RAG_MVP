@@ -17,7 +17,7 @@ from rag_core.data_loader import load_documents
 from rag_core.embedding import embed_documents
 from rag_core.retriever import retrieve
 from rag_core.generator import generate_answer
-from utils.config import get_llm_config
+from utils.config import get_llm_config, get_retrieval_params
 
 
 def main():
@@ -59,13 +59,17 @@ def main():
         doc_vectors = embed_documents(documents)
         print(f"   生成了 {len(doc_vectors)} 个向量")
         
-        # 3. 检索相关文档
-        print("3. 检索相关文档...")
-        relevant_docs = retrieve(question, doc_vectors, documents, top_k=3)
+        # 3. 获取检索参数
+        retrieval_params = get_retrieval_params()
+        print(f"3. 检索参数: {retrieval_params}")
+        
+        # 4. 检索相关文档
+        print("4. 检索相关文档...")
+        relevant_docs = retrieve(question, doc_vectors, documents, **retrieval_params)
         print(f"   检索到 {len(relevant_docs)} 个相关段落")
         
-        # 4. 生成答案
-        print("4. 生成答案...")
+        # 5. 生成答案
+        print("5. 生成答案...")
         answer = generate_answer(question, relevant_docs)
         
         print("-" * 50)

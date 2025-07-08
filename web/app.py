@@ -8,7 +8,7 @@ from rag_core.data_loader import load_documents
 from rag_core.embedding import embed_documents
 from rag_core.retriever import retrieve
 from rag_core.generator import generate_answer
-from utils.config import get_llm_config, LLM_PROVIDER
+from utils.config import get_llm_config, LLM_PROVIDER, get_retrieval_params
 from rag_core.llm_api import call_llm_api
 from utils.config import get_text_chunk_config
 import urllib.parse
@@ -47,6 +47,7 @@ def index():
             question = request.form.get("question", "") or ""
             llm_api_key = request.form.get("llm_api_key", "") or ""
             llm_model = request.form.get("llm_model", "") or ""
+            
             # 获取切片参数
             split_method = request.form.get('split_method', 'paragraph')
             chunk_size = request.form.get('chunk_size', type=int)
@@ -54,19 +55,57 @@ def index():
             max_sentences_per_chunk = request.form.get('max_sentences_per_chunk', type=int)
             min_paragraph_length = request.form.get('min_paragraph_length', type=int)
             max_paragraph_length = request.form.get('max_paragraph_length', type=int)
+            
             # 构建切片参数字典
             chunk_config = {'split_method': split_method}
             if split_method == 'character':
-                if chunk_size: chunk_config['chunk_size'] = chunk_size
-                if chunk_overlap is not None: chunk_config['chunk_overlap'] = chunk_overlap
+                if chunk_size: chunk_config['chunk_size'] = str(chunk_size)
+                if chunk_overlap is not None: chunk_config['chunk_overlap'] = str(chunk_overlap)
             if split_method == 'sentence':
-                if max_sentences_per_chunk: chunk_config['max_sentences_per_chunk'] = max_sentences_per_chunk
+                if max_sentences_per_chunk: chunk_config['max_sentences_per_chunk'] = str(max_sentences_per_chunk)
             if split_method == 'paragraph':
-                if min_paragraph_length: chunk_config['min_paragraph_length'] = min_paragraph_length
-                if max_paragraph_length: chunk_config['max_paragraph_length'] = max_paragraph_length
-            # 将切片参数编码进URL
+                if min_paragraph_length: chunk_config['min_paragraph_length'] = str(min_paragraph_length)
+                if max_paragraph_length: chunk_config['max_paragraph_length'] = str(max_paragraph_length)
+            
+            # 获取检索参数
+            top_k = request.form.get('top_k', type=int, default=3)
+            similarity_threshold = request.form.get('similarity_threshold', type=float, default=0.0)
+            deduplication = request.form.get('deduplication', 'true') == 'true'
+            retrieval_strategy = request.form.get('retrieval_strategy', 'cosine')
+            context_window = request.form.get('context_window', type=int, default=0)
+            
+            # 权重配置
+            length_weight = request.form.get('length_weight', '')
+            position_weight = request.form.get('position_weight', '')
+            keyword_weight = request.form.get('keyword_weight', '').split(',') if request.form.get('keyword_weight') else []
+            
+            weight_config = {
+                'length_weight': length_weight if length_weight else None,
+                'position_weight': position_weight if position_weight else None,
+                'keyword_weight': [kw.strip() for kw in keyword_weight if kw.strip()]
+            }
+            
+            # 构建检索参数字典
+            retrieval_config = {
+                'top_k': str(top_k),
+                'similarity_threshold': str(similarity_threshold),
+                'deduplication': str(deduplication).lower(),
+                'retrieval_strategy': retrieval_strategy,
+                'weight_config': weight_config,
+                'context_window': str(context_window)
+            }
+            
+            # 将参数编码进URL
             chunk_config_str = urllib.parse.urlencode(chunk_config)
-            return redirect(url_for("result", filename=filename, question=question, llm_api_key=llm_api_key, llm_model=llm_model, chunk_config=chunk_config_str))
+            retrieval_config_str = urllib.parse.urlencode(retrieval_config, doseq=True)
+            
+            return redirect(url_for("result", 
+                                  filename=filename, 
+                                  question=question, 
+                                  llm_api_key=llm_api_key, 
+                                  llm_model=llm_model, 
+                                  chunk_config=chunk_config_str,
+                                  retrieval_config=retrieval_config_str))
         else:
             flash("文件类型不支持")
             return redirect(request.url)
@@ -79,6 +118,7 @@ def result():
     llm_api_key = request.args.get("llm_api_key") or ""
     llm_model = request.args.get("llm_model") or ""
     config = get_llm_config()
+    
     # 自动填充模型名和API Key
     if not llm_model:
         llm_model = config.get("model_name", "Qwen/Qwen2.5-72B-Instruct")
@@ -87,39 +127,73 @@ def result():
     # 若用硅基流动且模型名为gpt-3.5-turbo，强制替换为平台支持模型
     if LLM_PROVIDER == "siliconflow" and llm_model == "gpt-3.5-turbo":
         llm_model = config.get("model_name", "Qwen/Qwen2.5-72B-Instruct")
+    
     if not filename:
         return render_template("result.html", answer="未指定文件名", filename="", question=question, doc_chunks=[], embeddings=[], retrieved_chunks=[])
+    
     file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    
     # 获取切片参数
     chunk_config_str = request.args.get('chunk_config', '')
     chunk_config = dict(urllib.parse.parse_qsl(chunk_config_str)) if chunk_config_str else get_text_chunk_config()
-    # 类型转换
+    
+    # 获取检索参数
+    retrieval_config_str = request.args.get('retrieval_config', '')
+    if retrieval_config_str:
+        retrieval_config = dict(urllib.parse.parse_qsl(retrieval_config_str, keep_blank_values=True))
+        # 处理权重配置
+        weight_config = {}
+        if retrieval_config.get('weight_config.length_weight'):
+            weight_config['length_weight'] = retrieval_config['weight_config.length_weight']
+        if retrieval_config.get('weight_config.position_weight'):
+            weight_config['position_weight'] = retrieval_config['weight_config.position_weight']
+        if retrieval_config.get('weight_config.keyword_weight'):
+            weight_config['keyword_weight'] = [kw.strip() for kw in retrieval_config['weight_config.keyword_weight'].split(',') if kw.strip()]
+        
+        retrieval_params = {
+            'top_k': int(retrieval_config.get('top_k', 3)),
+            'similarity_threshold': float(retrieval_config.get('similarity_threshold', 0.0)),
+            'deduplication': retrieval_config.get('deduplication', 'true') == 'true',
+            'retrieval_strategy': retrieval_config.get('retrieval_strategy', 'cosine'),
+            'weight_config': weight_config,
+            'context_window': int(retrieval_config.get('context_window', 0))
+        }
+    else:
+        retrieval_params = get_retrieval_params()
+    
+    # 类型转换 - 保持字符串类型，因为chunk_config需要字符串值
     for k in ['chunk_size', 'chunk_overlap', 'max_sentences_per_chunk', 'min_paragraph_length', 'max_paragraph_length']:
         if k in chunk_config and chunk_config[k] is not None:
             try:
-                chunk_config[k] = int(chunk_config[k])
+                # 确保是字符串类型
+                chunk_config[k] = str(chunk_config[k])
             except Exception:
                 pass
+    
     # 1. 文档加载
     try:
         doc_chunks = load_documents(file_path, chunk_config)
     except Exception as e:
         doc_chunks = [f"文档加载失败: {e}"]
+    
     # 2. 向量化
     try:
         embeddings = embed_documents(doc_chunks)
     except Exception as e:
         embeddings = [[0.0] * 8 for _ in doc_chunks]
+    
     # 3. 检索
     try:
-        retrieved_chunks = retrieve(question, embeddings, doc_chunks, model_path=None, top_k=2)
+        retrieved_chunks = retrieve(question, embeddings, doc_chunks, **retrieval_params)
     except Exception as e:
         retrieved_chunks = [f"检索失败: {e}"]
+    
     # 4. 生成
     try:
         answer = generate_answer(question, retrieved_chunks, llm_model=llm_model, api_key=llm_api_key)
     except Exception as e:
         answer = f"生成失败: {e}"
+    
     return render_template(
         "result.html",
         answer=answer,
@@ -128,7 +202,8 @@ def result():
         doc_chunks=doc_chunks,
         embeddings=embeddings,
         retrieved_chunks=retrieved_chunks,
-        chunk_config=chunk_config
+        chunk_config=chunk_config,
+        retrieval_params=retrieval_params
     )
 
 if __name__ == "__main__":
