@@ -2,6 +2,14 @@
 
 本项目基于"使用Python构建RAG系统"的原理，采用MVP（最小可行性产品）模式实现一个简洁的RAG（检索增强生成）系统。
 
+## 🆕 最新功能
+
+### 本地向量数据库 (v1.4)
+- **新增**: 本地向量存储引擎，支持SQLite + FAISS持久化存储
+- **功能**: 知识库管理、文档批量处理、向量检索和相似度搜索
+- **特性**: 支持多知识库、文档版本管理、增量更新
+- **界面**: Web端知识库管理界面，支持文档上传、搜索、删除等操作
+
 ## 🐛 最近修复
 
 ### 类型转换错误修复 (2025-07-08)
@@ -41,7 +49,9 @@ rag_mvp/
 │   ├── retriever.py         # 检索模块（基于余弦相似度，支持多种可调节参数）
 │   ├── generator.py         # 生成模块（拼接prompt并调用LLM）
 │   ├── llm_api.py           # LLM API调用模块（支持硅基流动等）
-│   └── text_splitter.py     # 增强版文本切片器
+│   ├── text_splitter.py     # 增强版文本切片器
+│   ├── vector_store.py      # 本地向量存储引擎（SQLite + FAISS）
+│   └── knowledge_base.py    # 知识库管理器
 │
 ├── utils/
 │   ├── __init__.py
@@ -52,13 +62,18 @@ rag_mvp/
 │   ├── app.py               # Flask Web应用
 │   ├── templates/
 │   │   ├── index.html       # 主页面模板（支持检索参数配置）
-│   │   └── result.html      # 结果页面模板（显示检索配置信息）
+│   │   ├── result.html      # 结果页面模板（显示检索配置信息）
+│   │   └── knowledge_base.html # 知识库管理页面
 │   └── static/
 │       ├── style.css        # 样式文件
 │       └── script.js        # 交互脚本
 │
 ├── models/                  # 本地模型存储目录
 │   └── sentence-transformers/
+│
+├── knowledge_base/          # 知识库存储目录
+│   ├── documents/           # 文档存储
+│   └── vectors/             # 向量存储
 │
 └── tests/
     ├── __init__.py
@@ -86,11 +101,13 @@ rag_mvp/
     - **generator.py**：智能拼接prompt并调用LLM生成答案。
     - **llm_api.py**：封装与大语言模型（LLM）API的交互，支持硅基流动等API。
     - **text_splitter.py**：增强版文本切片器，支持多种切片方式和可配置参数。
+    - **vector_store.py**：本地向量存储引擎，支持SQLite + FAISS持久化存储，提供向量检索和相似度搜索功能。
+    - **knowledge_base.py**：知识库管理器，整合文档处理、向量化和存储功能，支持多知识库管理。
 - **utils/**：工具类和配置管理。
     - **config.py**：支持多LLM服务配置（如硅基流动、OpenAI等），可通过环境变量`LLM_PROVIDER`选择服务，参数（API Key、模型名、URL）独立配置，便于灵活扩展。新增检索参数配置支持。
 - **web/**：Web界面模块。
     - **app.py**：Flask应用，提供文件上传和问答界面，支持检索参数配置。
-    - **templates/**：HTML模板，支持中文界面和响应式设计，新增检索参数配置界面。
+    - **templates/**：HTML模板，支持中文界面和响应式设计，新增检索参数配置界面和知识库管理界面。
     - **static/**：静态资源，包含样式和交互脚本。
 - **data/**：存放本地测试用的文档数据。
 - **models/**：本地模型存储目录，自动下载和管理。
@@ -115,11 +132,19 @@ pip install -r requirements.txt
 ### 2. 命令行使用
 
 ```bash
-# 基本使用
-python main.py data/example.txt "请总结文档内容"
+# 问答模式
+python main.py --mode qa --file data/example.txt --question "请总结文档内容"
 
-# 使用方式
-python main.py <文档路径> <问题>
+# 知识库模式
+python main.py --mode kb --action add --kb-name my_kb --document data/example.txt
+python main.py --mode kb --action search --kb-name my_kb --query "什么是RAG" --top-k 5
+python main.py --mode kb --action list --kb-name my_kb
+python main.py --mode kb --action stats --kb-name my_kb
+python main.py --mode kb --action delete --kb-name my_kb --doc-id 1
+python main.py --mode kb --action clear --kb-name my_kb
+
+# 查看帮助
+python main.py --help
 ```
 
 ### 3. Web界面使用
@@ -129,7 +154,57 @@ python main.py <文档路径> <问题>
 cd web
 python app.py
 
-# 访问 http://localhost:8080
+# 访问 http://localhost:5000
+# 知识库管理: http://localhost:5000/knowledge_base
+```
+
+## 知识库功能
+
+### 功能特性
+
+- **多知识库支持**: 可以创建和管理多个独立的知识库
+- **文档管理**: 支持添加、删除、查看文档列表
+- **向量存储**: 使用SQLite + FAISS进行持久化向量存储
+- **智能搜索**: 基于向量相似度的语义搜索
+- **Web界面**: 提供友好的Web管理界面
+- **命令行工具**: 支持命令行操作知识库
+
+### 知识库操作
+
+```bash
+# 创建知识库（自动创建）
+kb = create_knowledge_base("my_kb")
+
+# 添加文档
+result = kb.add_document("path/to/document.txt")
+
+# 搜索文档
+results = kb.search("查询内容", top_k=5)
+
+# 列出所有文档
+documents = kb.list_documents()
+
+# 获取统计信息
+stats = kb.get_stats()
+
+# 删除文档
+kb.delete_document(doc_id)
+
+# 清空知识库
+kb.clear()
+```
+
+### 存储结构
+
+```
+knowledge_base/
+├── documents/           # 文档存储
+│   └── {kb_name}/      # 按知识库名称分类
+└── vectors/            # 向量存储
+    └── {kb_name}/      # 按知识库名称分类
+        ├── vector_store.db  # SQLite数据库
+        ├── embeddings.npy   # 向量数据
+        └── faiss_index.pkl  # FAISS索引
 ```
 
 ## 检索参数配置

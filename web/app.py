@@ -2,12 +2,13 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from werkzeug.utils import secure_filename
 from rag_core.data_loader import load_documents
 from rag_core.embedding import embed_documents
 from rag_core.retriever import retrieve
 from rag_core.generator import generate_answer
+from rag_core.knowledge_base import KnowledgeBase, create_knowledge_base, list_knowledge_bases
 from utils.config import get_llm_config, LLM_PROVIDER, get_retrieval_params
 from rag_core.llm_api import call_llm_api
 from utils.config import get_text_chunk_config
@@ -111,6 +112,115 @@ def index():
             return redirect(request.url)
     return render_template("index.html")
 
+@app.route("/knowledge_base")
+def knowledge_base():
+    """知识库管理页面"""
+    kb_name = request.args.get("kb_name", "default")
+    try:
+        kb = create_knowledge_base(kb_name)
+        documents = kb.list_documents()
+        stats = kb.get_stats()
+        all_kbs = list_knowledge_bases()
+    except Exception as e:
+        documents = []
+        stats = {}
+        all_kbs = []
+        flash(f"加载知识库失败: {e}")
+    
+    return render_template("knowledge_base.html", 
+                         kb_name=kb_name,
+                         documents=documents,
+                         stats=stats,
+                         all_kbs=all_kbs)
+
+@app.route("/kb/add_document", methods=["POST"])
+def kb_add_document():
+    """添加文档到知识库"""
+    kb_name = request.form.get("kb_name", "default")
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "未选择文件"})
+    
+    file = request.files["file"]
+    if not file or not file.filename:
+        return jsonify({"success": False, "error": "未选择文件"})
+    
+    if not allowed_file(file.filename):
+        return jsonify({"success": False, "error": "文件类型不支持"})
+    
+    try:
+        # 保存上传的文件
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        file.save(file_path)
+        
+        # 添加到知识库
+        kb = create_knowledge_base(kb_name)
+        result = kb.add_document(file_path)
+        
+        # 清理临时文件
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/kb/search")
+def kb_search():
+    """在知识库中搜索"""
+    kb_name = request.args.get("kb_name", "default")
+    query = request.args.get("query", "")
+    top_k = request.args.get("top_k", type=int, default=5)
+    
+    if not query:
+        return jsonify({"success": False, "error": "查询不能为空"})
+    
+    try:
+        kb = create_knowledge_base(kb_name)
+        results = kb.search(query, top_k=top_k)
+        return jsonify({"success": True, "results": results})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/kb/delete_document", methods=["POST"])
+def kb_delete_document():
+    """删除知识库中的文档"""
+    kb_name = request.form.get("kb_name", "default")
+    doc_id = request.form.get("doc_id", type=int)
+    
+    if not doc_id:
+        return jsonify({"success": False, "error": "文档ID不能为空"})
+    
+    try:
+        kb = create_knowledge_base(kb_name)
+        success = kb.delete_document(doc_id)
+        return jsonify({"success": success})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/kb/stats")
+def kb_stats():
+    """获取知识库统计信息"""
+    kb_name = request.args.get("kb_name", "default")
+    try:
+        kb = create_knowledge_base(kb_name)
+        stats = kb.get_stats()
+        return jsonify({"success": True, "stats": stats})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/kb/clear", methods=["POST"])
+def kb_clear():
+    """清空知识库"""
+    kb_name = request.form.get("kb_name", "default")
+    try:
+        kb = create_knowledge_base(kb_name)
+        success = kb.clear()
+        return jsonify({"success": success})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
 @app.route("/result")
 def result():
     filename = request.args.get("filename") or ""
@@ -202,9 +312,7 @@ def result():
         doc_chunks=doc_chunks,
         embeddings=embeddings,
         retrieved_chunks=retrieved_chunks,
-        chunk_config=chunk_config,
-        retrieval_params=retrieval_params
     )
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    app.run(debug=True, host="0.0.0.0", port=5000)
