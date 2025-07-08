@@ -15,6 +15,7 @@ from .text_splitter import TextSplitter
 from .vector_store import VectorStore
 from .enhanced_retriever import create_enhanced_retriever
 from utils.config import get_text_chunk_config
+from utils.chunk_config import get_default_chunk_config, get_recommended_configs, validate_chunk_config
 
 
 class KnowledgeBase:
@@ -58,7 +59,7 @@ class KnowledgeBase:
         添加文档到知识库
         
         :param file_path: 文档路径
-        :param chunk_config: 文本切片配置
+        :param chunk_config: 文本切片配置，支持文档级别的参数调整
         :param processor_config: 预处理器配置
         :return: 添加结果信息
         """
@@ -82,12 +83,20 @@ class KnowledgeBase:
             shutil.copy2(file_path, dest_path)
             print(f"[knowledge_base] 文档已复制到: {dest_path}")
             
-            # 2. 使用增强版文档预处理器加载和切片文档
+            # 2. 验证和合并切片配置
             if chunk_config:
-                self.text_splitter.config.update(chunk_config)
+                # 验证用户配置
+                errors = validate_chunk_config(chunk_config)
+                if errors:
+                    print(f"[knowledge_base] 切片配置验证警告: {errors}")
+                
+                # 创建文档专用的切片器
+                doc_splitter = TextSplitter(chunk_config)
+            else:
+                doc_splitter = self.text_splitter
             
             # 使用新的文档加载函数，获取详细元数据
-            doc_result = load_documents_with_metadata(str(dest_path), self.text_splitter.config, processor_config)
+            doc_result = load_documents_with_metadata(str(dest_path), doc_splitter.config, processor_config)
             chunks = doc_result['chunks']
             
             print(f"[knowledge_base] 文档预处理完成，格式: {doc_result.get('format', 'unknown')}")
@@ -373,6 +382,29 @@ class KnowledgeBase:
         :return: 支持的文件扩展名列表
         """
         return get_supported_formats()
+    
+    def get_chunk_config_info(self) -> Dict:
+        """
+        获取切片配置信息
+        
+        :return: 包含默认配置、推荐配置和参数说明的字典
+        """
+        from utils.chunk_config import get_parameters_by_category
+        
+        return {
+            "default_config": get_default_chunk_config(),
+            "recommended_configs": get_recommended_configs(),
+            "parameters": get_parameters_by_category()
+        }
+    
+    def validate_chunk_config(self, config: Dict) -> Dict[str, List[str]]:
+        """
+        验证切片配置
+        
+        :param config: 要验证的配置
+        :return: 验证错误信息
+        """
+        return validate_chunk_config(config)
 
 
 def create_knowledge_base(kb_name: str, base_path: str = "knowledge_base") -> KnowledgeBase:

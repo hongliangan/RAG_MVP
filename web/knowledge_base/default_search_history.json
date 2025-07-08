@@ -52,5 +52,29 @@
     "timestamp": "2025-07-08T13:23:43.721874",
     "result_count": 1,
     "query_hash": "c9dd9ed89b0ed80a3e512f736dd6bd0a"
+  },
+  {
+    "query": "金蝶erp",
+    "timestamp": "2025-07-08T13:44:49.111324",
+    "result_count": 3,
+    "query_hash": "2b932a3963c2b60e19e6bbd9257b59a4"
+  },
+  {
+    "query": "erp",
+    "timestamp": "2025-07-08T13:46:05.227986",
+    "result_count": 5,
+    "query_hash": "def6d90e829e50c63f98c387daecd138"
+  },
+  {
+    "query": "金蝶erp的优势是什么？",
+    "timestamp": "2025-07-08T13:46:42.874812",
+    "result_count": 3,
+    "query_hash": "3c86960698c0bfac8389c3c32094a466"
+  },
+  {
+    "query": "民航二所",
+    "timestamp": "2025-07-08T13:57:54.036382",
+    "result_count": 5,
+    "query_hash": "4d38a3f85441a4828349de4c381ad098"
   }
 ]

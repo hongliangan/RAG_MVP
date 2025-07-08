@@ -8,3 +8,7 @@ python-dotenv==1.0.0
 pandas
 openpyxl
 xlrd
+beautifulsoup4
+scikit-learn
+faiss-cpu
+pytest

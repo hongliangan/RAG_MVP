@@ -180,9 +180,55 @@ def kb_add_document():
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(file_path)
         
+        # 解析切片配置参数
+        chunk_config = {}
+        split_method = request.form.get('split_method', 'paragraph')
+        chunk_config['split_method'] = split_method
+        
+        # 根据切片方式获取对应参数
+        if split_method == 'character':
+            chunk_size = request.form.get('chunk_size', type=int)
+            chunk_overlap = request.form.get('chunk_overlap', type=int)
+            if chunk_size: chunk_config['chunk_size'] = chunk_size
+            if chunk_overlap is not None: chunk_config['chunk_overlap'] = chunk_overlap
+            
+        elif split_method == 'sentence':
+            max_sentences = request.form.get('max_sentences_per_chunk', type=int)
+            if max_sentences: chunk_config['max_sentences_per_chunk'] = max_sentences
+            
+        elif split_method == 'paragraph':
+            min_length = request.form.get('min_paragraph_length', type=int)
+            max_length = request.form.get('max_paragraph_length', type=int)
+            separator = request.form.get('paragraph_separator', '\n\n')
+            if min_length: chunk_config['min_paragraph_length'] = min_length
+            if max_length: chunk_config['max_paragraph_length'] = max_length
+            if separator: chunk_config['paragraph_separator'] = separator
+        
+        # 通用过滤参数
+        min_chunk_length = request.form.get('min_chunk_length', type=int)
+        max_chunk_length = request.form.get('max_chunk_length', type=int)
+        remove_empty = request.form.get('remove_empty_chunks', 'true') == 'true'
+        remove_whitespace = request.form.get('remove_whitespace_only', 'true') == 'true'
+        
+        if min_chunk_length: chunk_config['min_chunk_length'] = min_chunk_length
+        if max_chunk_length: chunk_config['max_chunk_length'] = max_chunk_length
+        chunk_config['remove_empty_chunks'] = remove_empty
+        chunk_config['remove_whitespace_only'] = remove_whitespace
+        
+        # 高级参数
+        smart_split = request.form.get('smart_split', 'true') == 'true'
+        preserve_formatting = request.form.get('preserve_formatting', 'false') == 'true'
+        merge_short_chunks = request.form.get('merge_short_chunks', 'true') == 'true'
+        merge_threshold = request.form.get('merge_threshold', type=float)
+        
+        chunk_config['smart_split'] = smart_split
+        chunk_config['preserve_formatting'] = preserve_formatting
+        chunk_config['merge_short_chunks'] = merge_short_chunks
+        if merge_threshold: chunk_config['merge_threshold'] = merge_threshold
+        
         # 添加到知识库
         kb = create_knowledge_base(kb_name)
-        result = kb.add_document(file_path)
+        result = kb.add_document(file_path, chunk_config=chunk_config)
         
         # 清理临时文件
         if os.path.exists(file_path):
@@ -334,6 +380,27 @@ def kb_clear():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+@app.route("/kb/config_info")
+def kb_config_info():
+    """获取切片配置信息"""
+    try:
+        kb = create_knowledge_base("default")
+        config_info = kb.get_chunk_config_info()
+        return jsonify(config_info)
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/kb/validate_config", methods=["POST"])
+def kb_validate_config():
+    """验证切片配置"""
+    try:
+        config = request.get_json()
+        kb = create_knowledge_base("default")
+        errors = kb.validate_chunk_config(config)
+        return jsonify({"errors": errors, "valid": len(errors) == 0})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 # ==================== 对话相关路由 ====================
 
 @app.route("/chat")
@@ -381,7 +448,8 @@ def chat_send():
     message = request.form.get("message", "").strip()
     kb_name = request.form.get("kb_name", "default")
     
-    if not session_id or not message:
+    # 修正：session_id为None、空字符串或'None'时直接返回错误
+    if not session_id or session_id == "None" or not message:
         return jsonify({"success": False, "error": "缺少必要参数"})
     
     try:
@@ -467,7 +535,7 @@ def chat_delete():
     """删除对话"""
     session_id = request.form.get("session_id")
     
-    if not session_id:
+    if not session_id or session_id == "None":
         return jsonify({"success": False, "error": "缺少会话ID"})
     
     try:
@@ -483,7 +551,7 @@ def chat_export():
     session_id = request.form.get("session_id")
     format = request.form.get("format", "json")
     
-    if not session_id:
+    if not session_id or session_id == "None":
         return jsonify({"success": False, "error": "缺少会话ID"})
     
     try:
@@ -540,8 +608,34 @@ def result():
     
     # 获取切片参数
     chunk_config_str = request.args.get('chunk_config', '')
-    chunk_config = dict(urllib.parse.parse_qsl(chunk_config_str)) if chunk_config_str else get_text_chunk_config()
-    
+    if chunk_config_str:
+        raw_config = dict(urllib.parse.parse_qsl(chunk_config_str))
+        chunk_config = {}
+        int_keys = [
+            'chunk_size', 'chunk_overlap', 'max_sentences_per_chunk',
+            'min_paragraph_length', 'max_paragraph_length',
+            'min_chunk_length', 'max_chunk_length'
+        ]
+        float_keys = ['merge_threshold']
+        bool_keys = ['remove_empty_chunks', 'remove_whitespace_only', 'smart_split', 'preserve_formatting', 'merge_short_chunks']
+        for k, v in raw_config.items():
+            if k in int_keys:
+                try:
+                    chunk_config[k] = int(v)
+                except Exception:
+                    chunk_config[k] = v
+            elif k in float_keys:
+                try:
+                    chunk_config[k] = float(v)
+                except Exception:
+                    chunk_config[k] = v
+            elif k in bool_keys:
+                chunk_config[k] = str(v).lower() == 'true'
+            else:
+                chunk_config[k] = v
+    else:
+        chunk_config = get_text_chunk_config()
+
     # 获取检索参数
     retrieval_config_str = request.args.get('retrieval_config', '')
     if retrieval_config_str:
@@ -566,14 +660,8 @@ def result():
     else:
         retrieval_params = get_retrieval_params()
     
-    # 类型转换 - 保持字符串类型，因为chunk_config需要字符串值
-    for k in ['chunk_size', 'chunk_overlap', 'max_sentences_per_chunk', 'min_paragraph_length', 'max_paragraph_length']:
-        if k in chunk_config and chunk_config[k] is not None:
-            try:
-                # 确保是字符串类型
-                chunk_config[k] = str(chunk_config[k])
-            except Exception:
-                pass
+    # 类型转换 - 保持数值类型，不要转为字符串
+    # 不再强制转为字符串，保持原始类型，TextSplitter 内部会做类型转换
     
     # 1. 文档加载
     try:
@@ -607,6 +695,8 @@ def result():
         doc_chunks=doc_chunks,
         embeddings=embeddings,
         retrieved_chunks=retrieved_chunks,
+        chunk_config=chunk_config,
+        retrieval_params=retrieval_params,
     )
 
 if __name__ == "__main__":

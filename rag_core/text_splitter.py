@@ -3,8 +3,9 @@ text_splitter.py
 增强版文本切片器，支持多种切片方式和可配置参数。
 """
 import re
-from typing import List
+from typing import List, Dict, Any
 from utils.config import get_text_chunk_config
+from utils.chunk_config import get_default_chunk_config, validate_chunk_config
 
 
 class TextSplitter:
@@ -18,7 +19,20 @@ class TextSplitter:
         
         :param config: 切片配置字典，如果为None则使用默认配置
         """
-        self.config = config or get_text_chunk_config()
+        # 合并默认配置和用户配置
+        default_config = get_default_chunk_config()
+        if config:
+            # 验证用户配置
+            errors = validate_chunk_config(config)
+            if errors:
+                print(f"[text_splitter] 配置验证警告: {errors}")
+            
+            # 合并配置
+            self.config = default_config.copy()
+            self.config.update(config)
+        else:
+            self.config = default_config
+            
         self.split_method = self.config.get("split_method", "paragraph")
         
         # 确保数值类型参数被正确转换
@@ -49,6 +63,10 @@ class TextSplitter:
             self.config["min_chunk_length"] = int(self.config["min_chunk_length"])
         if "max_chunk_length" in self.config:
             self.config["max_chunk_length"] = int(self.config["max_chunk_length"])
+            
+        # 高级参数
+        if "merge_threshold" in self.config:
+            self.config["merge_threshold"] = float(self.config["merge_threshold"])
             
     def split_text(self, text: str) -> List[str]:
         """
@@ -85,6 +103,7 @@ class TextSplitter:
         """
         chunk_size = self.config.get("chunk_size", 1000)
         chunk_overlap = self.config.get("chunk_overlap", 200)
+        smart_split = self.config.get("smart_split", True)
         
         if chunk_overlap >= chunk_size:
             chunk_overlap = chunk_size // 4  # 默认重叠为块大小的1/4
@@ -96,13 +115,10 @@ class TextSplitter:
             end = start + chunk_size
             chunk = text[start:end]
             
-            # 如果不是最后一块，尝试在合适的位置分割（避免切断单词）
-            if end < len(text):
-                # 寻找最后一个空格或标点符号
-                last_space = chunk.rfind(' ')
-                last_punct = max(chunk.rfind('。'), chunk.rfind('！'), chunk.rfind('？'), 
-                               chunk.rfind('.'), chunk.rfind('!'), chunk.rfind('?'))
-                split_point = max(last_space, last_punct)
+            # 智能分割：如果不是最后一块，尝试在合适的位置分割
+            if smart_split and end < len(text):
+                # 寻找最佳分割点
+                split_point = self._find_best_split_point(chunk, chunk_size)
                 
                 if split_point > chunk_size * 0.7:  # 如果找到合适的分割点
                     chunk = chunk[:split_point + 1]
@@ -112,6 +128,24 @@ class TextSplitter:
             start = end - chunk_overlap
             
         return chunks
+    
+    def _find_best_split_point(self, chunk: str, chunk_size: int) -> int:
+        """
+        寻找最佳分割点
+        
+        :param chunk: 文本块
+        :param chunk_size: 块大小
+        :return: 最佳分割点位置
+        """
+        # 优先级：句号 > 感叹号 > 问号 > 逗号 > 分号 > 空格
+        split_chars = ['。', '！', '？', '.', '!', '?', '，', ',', '；', ';', ' ']
+        
+        for char in split_chars:
+            pos = chunk.rfind(char)
+            if pos > chunk_size * 0.5:  # 确保分割点不要太靠前
+                return pos
+        
+        return -1  # 没找到合适的分割点
     
     def _split_by_sentence(self, text: str) -> List[str]:
         """
@@ -193,9 +227,12 @@ class TextSplitter:
         max_length = self.config.get("max_chunk_length", 3000)
         remove_empty = self.config.get("remove_empty_chunks", True)
         remove_whitespace = self.config.get("remove_whitespace_only", True)
+        merge_short_chunks = self.config.get("merge_short_chunks", True)
+        merge_threshold = self.config.get("merge_threshold", 0.3)
+        preserve_formatting = self.config.get("preserve_formatting", False)
         
+        # 第一步：基础过滤
         filtered_chunks = []
-        
         for chunk in chunks:
             # 移除空块
             if remove_empty and not chunk.strip():
@@ -215,8 +252,68 @@ class TextSplitter:
                 filtered_chunks.extend(sub_chunks)
             else:
                 filtered_chunks.append(chunk)
+        
+        # 第二步：合并短块
+        if merge_short_chunks:
+            filtered_chunks = self._merge_short_chunks(filtered_chunks, min_length, merge_threshold)
+        
+        # 第三步：格式化处理
+        if not preserve_formatting:
+            filtered_chunks = self._clean_formatting(filtered_chunks)
                 
         return filtered_chunks
+    
+    def _merge_short_chunks(self, chunks: List[str], min_length: int, merge_threshold: float) -> List[str]:
+        """
+        合并过短的文本块
+        
+        :param chunks: 文本块列表
+        :param min_length: 最小长度
+        :param merge_threshold: 合并阈值
+        :return: 合并后的文本块列表
+        """
+        if not chunks:
+            return chunks
+            
+        merged_chunks = []
+        current_chunk = ""
+        threshold_length = int(min_length * merge_threshold)
+        
+        for chunk in chunks:
+            if len(chunk) < threshold_length and current_chunk:
+                # 合并短块
+                current_chunk += "\n" + chunk
+            else:
+                # 保存当前块，开始新块
+                if current_chunk:
+                    merged_chunks.append(current_chunk)
+                current_chunk = chunk
+        
+        # 添加最后一个块
+        if current_chunk:
+            merged_chunks.append(current_chunk)
+            
+        return merged_chunks
+    
+    def _clean_formatting(self, chunks: List[str]) -> List[str]:
+        """
+        清理文本格式
+        
+        :param chunks: 文本块列表
+        :return: 清理后的文本块列表
+        """
+        cleaned_chunks = []
+        
+        for chunk in chunks:
+            # 移除多余的空白字符
+            cleaned = re.sub(r'\n\s*\n', '\n', chunk)  # 移除多余的空行
+            cleaned = re.sub(r'[ \t]+', ' ', cleaned)  # 合并多个空格
+            cleaned = cleaned.strip()
+            
+            if cleaned:
+                cleaned_chunks.append(cleaned)
+                
+        return cleaned_chunks
 
 
 def split_text(text: str, config: dict | None = None) -> List[str]:

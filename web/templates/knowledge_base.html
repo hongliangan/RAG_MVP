@@ -122,15 +122,175 @@
                         <div class="kb-card">
                             <h5><i class="fas fa-upload"></i> 添加文档</h5>
                             <form id="uploadForm" enctype="multipart/form-data">
-                                <div class="row">
-                                                                    <div class="col-md-8">
-                                    <input type="file" class="form-control" id="documentFile" name="file" accept=".txt,.pdf,.docx,.md,.html,.json,.csv,.xlsx,.xls" required>
-                                    <small class="form-text text-muted">
-                                        支持格式: TXT, PDF, DOCX, Markdown, HTML, JSON, CSV, Excel
-                                    </small>
-                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-md-8">
+                                        <input type="file" class="form-control" id="documentFile" name="file" accept=".txt,.pdf,.docx,.md,.html,.json,.csv,.xlsx,.xls" required>
+                                        <small class="form-text text-muted">
+                                            支持格式: TXT, PDF, DOCX, Markdown, HTML, JSON, CSV, Excel
+                                        </small>
+                                    </div>
                                     <div class="col-md-4">
-                                        <button type="submit" class="btn btn-primary w-100">
+                                        <button type="button" class="btn btn-outline-secondary w-100" onclick="toggleChunkConfig()">
+                                            <i class="fas fa-cog"></i> 切片参数配置
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- 切片参数配置区域 -->
+                                <div id="chunkConfigArea" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0"><i class="fas fa-sliders-h"></i> 文档切片参数配置</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- 基础配置 -->
+                                            <div class="row mb-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">切片方式</label>
+                                                    <select class="form-select" id="splitMethod" onchange="updateParameterVisibility()">
+                                                        <option value="paragraph">按段落切片</option>
+                                                        <option value="character">按字符数切片</option>
+                                                        <option value="sentence">按句子切片</option>
+                                                    </select>
+                                                    <small class="form-text text-muted">选择最适合文档类型的切片方式</small>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">推荐配置模板</label>
+                                                    <select class="form-select" id="configTemplate" onchange="loadConfigTemplate()">
+                                                        <option value="">自定义配置</option>
+                                                        <option value="通用文档">通用文档</option>
+                                                        <option value="长文本">长文本</option>
+                                                        <option value="对话文本">对话文本</option>
+                                                        <option value="技术文档">技术文档</option>
+                                                        <option value="新闻文章">新闻文章</option>
+                                                    </select>
+                                                    <small class="form-text text-muted">快速应用预设配置</small>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 字符数切片参数 -->
+                                            <div id="characterParams" class="parameter-group" style="display: none;">
+                                                <h6>字符数切片参数</h6>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">块大小 (字符)</label>
+                                                        <input type="number" class="form-control" id="chunkSize" name="chunk_size" value="800" min="100" max="3000" step="50">
+                                                        <small class="form-text text-muted">每个文本块的最大字符数</small>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">重叠大小 (字符)</label>
+                                                        <input type="number" class="form-control" id="chunkOverlap" name="chunk_overlap" value="100" min="0" max="500" step="10">
+                                                        <small class="form-text text-muted">相邻文本块的重叠字符数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 句子切片参数 -->
+                                            <div id="sentenceParams" class="parameter-group" style="display: none;">
+                                                <h6>句子切片参数</h6>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">每块最大句子数</label>
+                                                        <input type="number" class="form-control" id="maxSentencesPerChunk" name="max_sentences_per_chunk" value="3" min="1" max="10" step="1">
+                                                        <small class="form-text text-muted">每个文本块包含的最大句子数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 段落切片参数 -->
+                                            <div id="paragraphParams" class="parameter-group">
+                                                <h6>段落切片参数</h6>
+                                                <div class="row">
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">最小段落长度</label>
+                                                        <input type="number" class="form-control" id="minParagraphLength" name="min_paragraph_length" value="30" min="10" max="200" step="5">
+                                                        <small class="form-text text-muted">最小段落长度（字符）</small>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">最大段落长度</label>
+                                                        <input type="number" class="form-control" id="maxParagraphLength" name="max_paragraph_length" value="1500" min="500" max="3000" step="100">
+                                                        <small class="form-text text-muted">最大段落长度（字符）</small>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">段落分隔符</label>
+                                                        <input type="text" class="form-control" id="paragraphSeparator" name="paragraph_separator" value="\n\n">
+                                                        <small class="form-text text-muted">段落分隔符</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 通用过滤参数 -->
+                                            <div class="row mb-3">
+                                                <div class="col-12">
+                                                    <h6>通用过滤参数</h6>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label">最小块长度</label>
+                                                    <input type="number" class="form-control" id="minChunkLength" name="min_chunk_length" value="20" min="5" max="100" step="5">
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label">最大块长度</label>
+                                                    <input type="number" class="form-control" id="maxChunkLength" name="max_chunk_length" value="3000" min="1000" max="5000" step="100">
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check mt-4">
+                                                        <input class="form-check-input" type="checkbox" id="removeEmptyChunks" name="remove_empty_chunks" checked>
+                                                        <label class="form-check-label" for="removeEmptyChunks">
+                                                            移除空块
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check mt-4">
+                                                        <input class="form-check-input" type="checkbox" id="removeWhitespaceOnly" name="remove_whitespace_only" checked>
+                                                        <label class="form-check-label" for="removeWhitespaceOnly">
+                                                            移除空白块
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 高级参数 -->
+                                            <div class="row mb-3">
+                                                <div class="col-12">
+                                                    <h6>高级参数</h6>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="smartSplit" name="smart_split" checked>
+                                                        <label class="form-check-label" for="smartSplit">
+                                                            智能分割
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="preserveFormatting" name="preserve_formatting">
+                                                        <label class="form-check-label" for="preserveFormatting">
+                                                            保留格式
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="mergeShortChunks" name="merge_short_chunks" checked>
+                                                        <label class="form-check-label" for="mergeShortChunks">
+                                                            合并短块
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label">合并阈值</label>
+                                                    <input type="number" class="form-control" id="mergeThreshold" name="merge_threshold" value="0.3" min="0.1" max="0.8" step="0.1">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <button type="submit" class="btn btn-primary">
                                             <i class="fas fa-plus"></i> 添加文档
                                         </button>
                                     </div>
@@ -609,6 +769,92 @@
             });
             
             container.innerHTML = html;
+        }
+        
+        // 切片参数配置相关函数
+        function toggleChunkConfig() {
+            const configArea = document.getElementById('chunkConfigArea');
+            const button = event.target;
+            
+            if (configArea.style.display === 'none') {
+                configArea.style.display = 'block';
+                button.innerHTML = '<i class="fas fa-eye-slash"></i> 隐藏参数配置';
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-outline-primary');
+            } else {
+                configArea.style.display = 'none';
+                button.innerHTML = '<i class="fas fa-cog"></i> 切片参数配置';
+                button.classList.remove('btn-outline-primary');
+                button.classList.add('btn-outline-secondary');
+            }
+        }
+        
+        function updateParameterVisibility() {
+            const splitMethod = document.getElementById('splitMethod').value;
+            
+            // 隐藏所有参数组
+            document.querySelectorAll('.parameter-group').forEach(group => {
+                group.style.display = 'none';
+            });
+            
+            // 显示对应的参数组
+            if (splitMethod === 'character') {
+                document.getElementById('characterParams').style.display = 'block';
+            } else if (splitMethod === 'sentence') {
+                document.getElementById('sentenceParams').style.display = 'block';
+            } else if (splitMethod === 'paragraph') {
+                document.getElementById('paragraphParams').style.display = 'block';
+            }
+        }
+        
+        async function loadConfigTemplate() {
+            const templateName = document.getElementById('configTemplate').value;
+            if (!templateName) return;
+            
+            try {
+                const response = await fetch('/kb/config_info');
+                const configInfo = await response.json();
+                
+                if (configInfo.recommended_configs && configInfo.recommended_configs[templateName]) {
+                    const config = configInfo.recommended_configs[templateName];
+                    applyConfigToForm(config);
+                    showMessage(`已加载 ${templateName} 配置模板`, 'success');
+                }
+            } catch (error) {
+                showMessage(`加载配置模板失败: ${error.message}`, 'warning');
+            }
+        }
+        
+        function applyConfigToForm(config) {
+            // 设置切片方式
+            if (config.split_method) {
+                document.getElementById('splitMethod').value = config.split_method;
+                updateParameterVisibility();
+            }
+            
+            // 设置字符数切片参数
+            if (config.chunk_size) document.getElementById('chunkSize').value = config.chunk_size;
+            if (config.chunk_overlap) document.getElementById('chunkOverlap').value = config.chunk_overlap;
+            
+            // 设置句子切片参数
+            if (config.max_sentences_per_chunk) document.getElementById('maxSentencesPerChunk').value = config.max_sentences_per_chunk;
+            
+            // 设置段落切片参数
+            if (config.min_paragraph_length) document.getElementById('minParagraphLength').value = config.min_paragraph_length;
+            if (config.max_paragraph_length) document.getElementById('maxParagraphLength').value = config.max_paragraph_length;
+            if (config.paragraph_separator) document.getElementById('paragraphSeparator').value = config.paragraph_separator;
+            
+            // 设置通用过滤参数
+            if (config.min_chunk_length) document.getElementById('minChunkLength').value = config.min_chunk_length;
+            if (config.max_chunk_length) document.getElementById('maxChunkLength').value = config.max_chunk_length;
+            if (config.remove_empty_chunks !== undefined) document.getElementById('removeEmptyChunks').checked = config.remove_empty_chunks;
+            if (config.remove_whitespace_only !== undefined) document.getElementById('removeWhitespaceOnly').checked = config.remove_whitespace_only;
+            
+            // 设置高级参数
+            if (config.smart_split !== undefined) document.getElementById('smartSplit').checked = config.smart_split;
+            if (config.preserve_formatting !== undefined) document.getElementById('preserveFormatting').checked = config.preserve_formatting;
+            if (config.merge_short_chunks !== undefined) document.getElementById('mergeShortChunks').checked = config.merge_short_chunks;
+            if (config.merge_threshold) document.getElementById('mergeThreshold').value = config.merge_threshold;
         }
         
         // 清空知识库
