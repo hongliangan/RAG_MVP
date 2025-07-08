@@ -1,0 +1,6 @@
+python-docx
+PyPDF2
+fpdf
+reportlab
+Flask
+sentence-transformers
