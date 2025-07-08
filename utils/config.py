@@ -12,7 +12,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "siliconflow")
 LLM_CONFIGS = {
     "siliconflow": {
         "api_key": os.getenv("SILICONFLOW_API_KEY", "sk-naigtfmindcikjoukvfdiwmbjavabmaxkqoplfmyemalyobg"),
-        "model_name": os.getenv("SILICONFLOW_MODEL_NAME", "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"),
+        "model_name": os.getenv("SILICONFLOW_MODEL_NAME", "Tongyi-Zhiwen/QwenLong-L1-32B"),
         "api_url": os.getenv("SILICONFLOW_API_URL", "https://api.siliconflow.cn/v1/chat/completions"),
     },
     "openai": {
@@ -28,4 +28,6 @@ def get_llm_config():
     获取当前选定LLM服务的配置。
     :return: dict，包含api_key、model_name、api_url
     """
-    return LLM_CONFIGS.get(LLM_PROVIDER, {})
+    config = LLM_CONFIGS.get(LLM_PROVIDER, {})
+    print(f"[config] 当前LLM_PROVIDER: {LLM_PROVIDER}, model_name: {config.get('model_name')}")
+    return config

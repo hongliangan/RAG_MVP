@@ -20,7 +20,7 @@ def call_llm_api(prompt, model=None, api_key=None, api_url=None, stream=False, *
     # 获取当前LLM服务配置
     config = get_llm_config()
     api_key = api_key or config.get("api_key")
-    model = model or config.get("model_name", "gpt-3.5-turbo")  # 使用配置中的模型名
+    model = model or config.get("model_name")  # 使用配置中的模型名，不设置默认值
     api_url = api_url or config.get("api_url")
     temperature = kwargs.get("temperature", 0.7)
     max_tokens = kwargs.get("max_tokens", 512)
@@ -78,7 +78,7 @@ def call_llm_api(prompt, model=None, api_key=None, api_url=None, stream=False, *
             print("[llm_api] 请求URL:", api_url)
             print("[llm_api] 请求headers:", headers)
             print("[llm_api] 请求payload:", payload)
-            resp = requests.post(api_url, headers=headers, json=payload, timeout=60)
+            resp = requests.post(api_url, headers=headers, json=payload, timeout=120)
             print("[llm_api] 响应状态码:", resp.status_code)
             print("[llm_api] 响应内容:", resp.text)
             resp.raise_for_status()

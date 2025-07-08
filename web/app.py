@@ -80,7 +80,7 @@ def result():
         embeddings = [[0.0] * 8 for _ in doc_chunks]
     # 3. 检索
     try:
-        retrieved_chunks = retrieve(question, embeddings, doc_chunks, model_path='rag_mvp/models/all-MiniLM-L6-v2', top_k=2)
+        retrieved_chunks = retrieve(question, embeddings, doc_chunks, model_path=None, top_k=2)
     except Exception as e:
         retrieved_chunks = [f"检索失败: {e}"]
     # 4. 生成
@@ -99,4 +99,4 @@ def result():
     )
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=8080)

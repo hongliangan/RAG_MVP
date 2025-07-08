@@ -17,4 +17,4 @@ def generate_answer(query, relevant_docs, llm_model=None, **kwargs):
     context = "\n".join(relevant_docs)
     prompt = f"已知信息如下：\n{context}\n\n请根据上述内容回答：{query}"
     # 调用LLM API生成答案
-    return call_llm_api(prompt, model=llm_model or "gpt-3.5-turbo", **kwargs)
+    return call_llm_api(prompt, model=llm_model, **kwargs)
