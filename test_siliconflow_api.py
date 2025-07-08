@@ -10,10 +10,15 @@ def test_siliconflow_api():
     """测试硅基流动API"""
     
     # 从环境变量或配置文件获取API信息
-    api_key = os.getenv("SILICONFLOW_API_KEY", "sk-naigtfmindcikjoukvfdiwmbjavabmaxkqoplfmyemalyobg")
+    api_key = os.getenv("SILICONFLOW_API_KEY", "")
     model_name = os.getenv("SILICONFLOW_MODEL_NAME", "Tongyi-Zhiwen/QwenLong-L1-32B")
     api_url = os.getenv("SILICONFLOW_API_URL", "https://api.siliconflow.cn/v1/chat/completions")
     
+    if not api_key:
+        print("❌ 错误: 未设置 SILICONFLOW_API_KEY 环境变量")
+        print("请设置环境变量: export SILICONFLOW_API_KEY='your-api-key'")
+        return
+
     print(f"=== 硅基流动API测试 ===")
     print(f"API URL: {api_url}")
     print(f"模型: {model_name}")

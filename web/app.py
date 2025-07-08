@@ -9,6 +9,9 @@ from rag_core.embedding import embed_documents
 from rag_core.retriever import retrieve
 from rag_core.generator import generate_answer
 from utils.config import get_llm_config, LLM_PROVIDER
+from rag_core.llm_api import call_llm_api
+from utils.config import get_text_chunk_config
+import urllib.parse
 
 UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"txt", "pdf", "docx"}
@@ -44,7 +47,26 @@ def index():
             question = request.form.get("question", "") or ""
             llm_api_key = request.form.get("llm_api_key", "") or ""
             llm_model = request.form.get("llm_model", "") or ""
-            return redirect(url_for("result", filename=filename, question=question, llm_api_key=llm_api_key, llm_model=llm_model))
+            # 获取切片参数
+            split_method = request.form.get('split_method', 'paragraph')
+            chunk_size = request.form.get('chunk_size', type=int)
+            chunk_overlap = request.form.get('chunk_overlap', type=int)
+            max_sentences_per_chunk = request.form.get('max_sentences_per_chunk', type=int)
+            min_paragraph_length = request.form.get('min_paragraph_length', type=int)
+            max_paragraph_length = request.form.get('max_paragraph_length', type=int)
+            # 构建切片参数字典
+            chunk_config = {'split_method': split_method}
+            if split_method == 'character':
+                if chunk_size: chunk_config['chunk_size'] = chunk_size
+                if chunk_overlap is not None: chunk_config['chunk_overlap'] = chunk_overlap
+            if split_method == 'sentence':
+                if max_sentences_per_chunk: chunk_config['max_sentences_per_chunk'] = max_sentences_per_chunk
+            if split_method == 'paragraph':
+                if min_paragraph_length: chunk_config['min_paragraph_length'] = min_paragraph_length
+                if max_paragraph_length: chunk_config['max_paragraph_length'] = max_paragraph_length
+            # 将切片参数编码进URL
+            chunk_config_str = urllib.parse.urlencode(chunk_config)
+            return redirect(url_for("result", filename=filename, question=question, llm_api_key=llm_api_key, llm_model=llm_model, chunk_config=chunk_config_str))
         else:
             flash("文件类型不支持")
             return redirect(request.url)
@@ -68,9 +90,19 @@ def result():
     if not filename:
         return render_template("result.html", answer="未指定文件名", filename="", question=question, doc_chunks=[], embeddings=[], retrieved_chunks=[])
     file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    # 获取切片参数
+    chunk_config_str = request.args.get('chunk_config', '')
+    chunk_config = dict(urllib.parse.parse_qsl(chunk_config_str)) if chunk_config_str else get_text_chunk_config()
+    # 类型转换
+    for k in ['chunk_size', 'chunk_overlap', 'max_sentences_per_chunk', 'min_paragraph_length', 'max_paragraph_length']:
+        if k in chunk_config and chunk_config[k] is not None:
+            try:
+                chunk_config[k] = int(chunk_config[k])
+            except Exception:
+                pass
     # 1. 文档加载
     try:
-        doc_chunks = load_documents(file_path)
+        doc_chunks = load_documents(file_path, chunk_config)
     except Exception as e:
         doc_chunks = [f"文档加载失败: {e}"]
     # 2. 向量化
@@ -95,7 +127,8 @@ def result():
         question=question,
         doc_chunks=doc_chunks,
         embeddings=embeddings,
-        retrieved_chunks=retrieved_chunks
+        retrieved_chunks=retrieved_chunks,
+        chunk_config=chunk_config
     )
 
 if __name__ == "__main__":

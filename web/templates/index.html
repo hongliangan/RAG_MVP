@@ -29,6 +29,50 @@
             <label for="llm_model" class="form-label">LLM模型名</label>
             <input class="form-control" type="text" id="llm_model" name="llm_model" placeholder="可选，留空则用默认配置">
         </div>
+        <!-- 新增：文本切片参数设置 -->
+        <div class="form-group mt-3">
+            <label for="split_method">文本切片方式：</label>
+            <select class="form-control" id="split_method" name="split_method" onchange="onSplitMethodChange()">
+                <option value="paragraph">按段落</option>
+                <option value="character">按字符数</option>
+                <option value="sentence">按句子</option>
+            </select>
+        </div>
+        <div id="character_params" style="display:none;">
+            <div class="form-group mt-2">
+                <label for="chunk_size">每块最大字符数：</label>
+                <input type="number" class="form-control" id="chunk_size" name="chunk_size" value="1000" min="100" max="5000">
+            </div>
+            <div class="form-group mt-2">
+                <label for="chunk_overlap">相邻块重叠字符数：</label>
+                <input type="number" class="form-control" id="chunk_overlap" name="chunk_overlap" value="200" min="0" max="1000">
+            </div>
+        </div>
+        <div id="sentence_params" style="display:none;">
+            <div class="form-group mt-2">
+                <label for="max_sentences_per_chunk">每块最大句子数：</label>
+                <input type="number" class="form-control" id="max_sentences_per_chunk" name="max_sentences_per_chunk" value="5" min="1" max="20">
+            </div>
+        </div>
+        <div id="paragraph_params" style="display:none;">
+            <div class="form-group mt-2">
+                <label for="min_paragraph_length">最小段落长度（字符）：</label>
+                <input type="number" class="form-control" id="min_paragraph_length" name="min_paragraph_length" value="50" min="0" max="1000">
+            </div>
+            <div class="form-group mt-2">
+                <label for="max_paragraph_length">最大段落长度（字符）：</label>
+                <input type="number" class="form-control" id="max_paragraph_length" name="max_paragraph_length" value="2000" min="100" max="10000">
+            </div>
+        </div>
+        <script>
+        function onSplitMethodChange() {
+            var method = document.getElementById('split_method').value;
+            document.getElementById('character_params').style.display = (method === 'character') ? '' : 'none';
+            document.getElementById('sentence_params').style.display = (method === 'sentence') ? '' : 'none';
+            document.getElementById('paragraph_params').style.display = (method === 'paragraph') ? '' : 'none';
+        }
+        document.addEventListener('DOMContentLoaded', onSplitMethodChange);
+        </script>
         <button type="submit" class="btn btn-primary">提交</button>
     </form>
 </body>

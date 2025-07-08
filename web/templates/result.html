@@ -18,6 +18,21 @@
         <strong>最终答案：</strong>
         <div class="alert alert-info">{{ answer }}</div>
     </div>
+    <div class="container mt-4">
+        <h4>本次文本切片参数</h4>
+        <ul>
+            <li>切片方式：{{ chunk_config.split_method }}</li>
+            {% if chunk_config.split_method == 'character' %}
+                <li>每块最大字符数：{{ chunk_config.chunk_size }}</li>
+                <li>重叠字符数：{{ chunk_config.chunk_overlap }}</li>
+            {% elif chunk_config.split_method == 'sentence' %}
+                <li>每块最大句子数：{{ chunk_config.max_sentences_per_chunk }}</li>
+            {% elif chunk_config.split_method == 'paragraph' %}
+                <li>最小段落长度：{{ chunk_config.min_paragraph_length }}</li>
+                <li>最大段落长度：{{ chunk_config.max_paragraph_length }}</li>
+            {% endif %}
+        </ul>
+    </div>
     <div class="mb-4">
         <h4>RAG处理进度</h4>
         <div class="progress" style="height: 30px;">

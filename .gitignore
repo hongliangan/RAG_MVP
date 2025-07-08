@@ -1,28 +1,87 @@
-# 忽略常见大文件和缓存
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+# 环境变量文件（包含敏感信息）
+.env
+.env.local
+.env.production
+
+# 模型文件（可能很大）
+models/
 *.bin
 *.safetensors
-*.h5
-*.pt
 *.ckpt
-*.ot
-*.pkl
-*.npz
-*.npy
-*.pb
-*.onnx
-*.tflite
-*.zip
-*.tar
-*.tar.gz
-*.7z
-*.rar
-*.log
-*.DS_Store
-__pycache__/
-.venv/
-.pytest_cache/
-.idea/
-.vscode/
 
-# 完全忽略models目录及其所有内容
-models/
+# 日志文件
+*.log
+logs/
+
+# 上传的文件
+web/uploads/*
+!web/uploads/.gitkeep
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+
+# 测试覆盖率
+.coverage
+htmlcov/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# 本地配置文件
+config.local.py
+settings.local.py
