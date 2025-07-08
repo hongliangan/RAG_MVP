@@ -123,9 +123,12 @@
                             <h5><i class="fas fa-upload"></i> 添加文档</h5>
                             <form id="uploadForm" enctype="multipart/form-data">
                                 <div class="row">
-                                    <div class="col-md-8">
-                                        <input type="file" class="form-control" id="documentFile" name="file" accept=".txt,.pdf,.docx" required>
-                                    </div>
+                                                                    <div class="col-md-8">
+                                    <input type="file" class="form-control" id="documentFile" name="file" accept=".txt,.pdf,.docx,.md,.html,.json,.csv,.xlsx,.xls" required>
+                                    <small class="form-text text-muted">
+                                        支持格式: TXT, PDF, DOCX, Markdown, HTML, JSON, CSV, Excel
+                                    </small>
+                                </div>
                                     <div class="col-md-4">
                                         <button type="submit" class="btn btn-primary w-100">
                                             <i class="fas fa-plus"></i> 添加文档
@@ -171,17 +174,44 @@
                     <!-- 搜索标签页 -->
                     <div class="tab-pane fade" id="search" role="tabpanel">
                         <div class="kb-card">
-                            <h5><i class="fas fa-search"></i> 知识库搜索</h5>
-                            <div class="row">
-                                <div class="col-md-8">
-                                    <input type="text" class="form-control" id="searchQuery" placeholder="输入搜索查询...">
+                            <h5><i class="fas fa-search"></i> 增强知识库搜索</h5>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control" id="searchQuery" placeholder="输入搜索查询..." list="searchSuggestions">
+                                    <datalist id="searchSuggestions"></datalist>
                                 </div>
                                 <div class="col-md-2">
                                     <input type="number" class="form-control" id="topK" value="5" min="1" max="20" placeholder="Top K">
                                 </div>
                                 <div class="col-md-2">
+                                    <select class="form-select" id="searchType">
+                                        <option value="enhanced">增强搜索</option>
+                                        <option value="basic">基础搜索</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
                                     <button class="btn btn-primary w-100" onclick="searchKnowledgeBase()">
                                         <i class="fas fa-search"></i> 搜索
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- 搜索选项 -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="useEnhanced" checked>
+                                        <label class="form-check-label" for="useEnhanced">
+                                            使用混合检索（向量+关键词）
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 text-end">
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="loadSearchHistory()">
+                                        <i class="fas fa-history"></i> 搜索历史
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="clearSearchHistory()">
+                                        <i class="fas fa-trash"></i> 清空历史
                                     </button>
                                 </div>
                             </div>
@@ -190,6 +220,17 @@
                         <!-- 搜索结果 -->
                         <div class="kb-card">
                             <h5><i class="fas fa-list-alt"></i> 搜索结果</h5>
+                            <div class="mb-3">
+                                <button class="btn btn-outline-success btn-sm" onclick="exportResults('json')">
+                                    <i class="fas fa-download"></i> 导出JSON
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" onclick="exportResults('txt')">
+                                    <i class="fas fa-download"></i> 导出TXT
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" onclick="exportResults('csv')">
+                                    <i class="fas fa-download"></i> 导出CSV
+                                </button>
+                            </div>
                             <div id="searchResults" class="search-results">
                                 <div class="text-center text-muted py-4">
                                     <i class="fas fa-search fa-3x mb-3"></i>
@@ -236,7 +277,20 @@
         
         // 隐藏加载提示
         function hideLoading() {
-            bootstrap.Modal.getInstance(document.getElementById('loadingModal')).hide();
+            const modalEl = document.getElementById('loadingModal');
+            try {
+                const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modalInstance.hide();
+                console.log('hideLoading called');
+            } catch (e) {
+                console.log('hideLoading fallback');
+            }
+            // 兜底：强制移除modal显示和遮罩
+            modalEl.classList.remove('show');
+            modalEl.style.display = 'none';
+            modalEl.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('modal-open');
+            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
         }
         
         // 显示消息
@@ -332,6 +386,7 @@
         async function searchKnowledgeBase() {
             const query = document.getElementById('searchQuery').value.trim();
             const topK = document.getElementById('topK').value;
+            const useEnhanced = document.getElementById('useEnhanced').checked;
             
             if (!query) {
                 showMessage('请输入搜索查询', 'warning');
@@ -341,24 +396,178 @@
             showLoading('正在搜索...');
             
             try {
-                const response = await fetch(`/kb/search?kb_name=${currentKbName}&query=${encodeURIComponent(query)}&top_k=${topK}`);
+                const formData = new FormData();
+                formData.append('kb_name', currentKbName);
+                formData.append('query', query);
+                formData.append('top_k', topK);
+                formData.append('use_enhanced', useEnhanced);
+                
+                const response = await fetch('/kb/search', {
+                    method: 'POST',
+                    body: formData
+                });
+                
                 const result = await response.json();
                 
                 if (result.success) {
                     displaySearchResults(result.results);
+                    // 更新搜索建议
+                    updateSearchSuggestions(query);
                 } else {
                     showMessage(`搜索失败: ${result.error}`, 'danger');
                 }
             } catch (error) {
                 showMessage(`请求失败: ${error.message}`, 'danger');
             } finally {
-                hideLoading();
+                setTimeout(hideLoading, 100); // 确保无论如何都关闭loading
+            }
+        }
+        
+        // 更新搜索建议
+        async function updateSearchSuggestions(query) {
+            if (query.length < 2) return;
+            
+            try {
+                const response = await fetch(`/kb/suggestions?kb_name=${currentKbName}&query=${encodeURIComponent(query)}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const datalist = document.getElementById('searchSuggestions');
+                    datalist.innerHTML = '';
+                    result.suggestions.forEach(suggestion => {
+                        const option = document.createElement('option');
+                        option.value = suggestion;
+                        datalist.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.log('获取搜索建议失败:', error);
+            }
+        }
+        
+        // 加载搜索历史
+        async function loadSearchHistory() {
+            try {
+                const response = await fetch(`/kb/history?kb_name=${currentKbName}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    displaySearchHistory(result.history);
+                } else {
+                    showMessage(`加载历史失败: ${result.error}`, 'danger');
+                }
+            } catch (error) {
+                showMessage(`请求失败: ${error.message}`, 'danger');
+            }
+        }
+        
+        // 显示搜索历史
+        function displaySearchHistory(history) {
+            const container = document.getElementById('searchResults');
+            
+            if (history.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-history fa-3x mb-3"></i>
+                        <p>暂无搜索历史</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<h6 class="mb-3">搜索历史</h6>';
+            history.forEach((record, index) => {
+                const date = new Date(record.timestamp).toLocaleString();
+                html += `
+                    <div class="result-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">${record.query}</h6>
+                                <small class="text-muted">
+                                    时间: ${date} | 结果数: ${record.result_count}
+                                </small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="useHistoryQuery('${record.query}')">
+                                使用
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // 使用历史查询
+        function useHistoryQuery(query) {
+            document.getElementById('searchQuery').value = query;
+            searchKnowledgeBase();
+        }
+        
+        // 清空搜索历史
+        async function clearSearchHistory() {
+            if (!confirm('确定要清空搜索历史吗？')) {
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('kb_name', currentKbName);
+                
+                const response = await fetch('/kb/clear_history', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('搜索历史已清空！', 'success');
+                } else {
+                    showMessage(`清空失败: ${result.error}`, 'danger');
+                }
+            } catch (error) {
+                showMessage(`请求失败: ${error.message}`, 'danger');
+            }
+        }
+        
+        // 导出搜索结果
+        async function exportResults(format) {
+            const results = window.currentSearchResults;
+            if (!results || results.length === 0) {
+                showMessage('没有可导出的搜索结果', 'warning');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('kb_name', currentKbName);
+                formData.append('results', JSON.stringify(results));
+                formData.append('format', format);
+                
+                const response = await fetch('/kb/export_results', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`结果已导出到: ${result.file_path}`, 'success');
+                } else {
+                    showMessage(`导出失败: ${result.error}`, 'danger');
+                }
+            } catch (error) {
+                showMessage(`请求失败: ${error.message}`, 'danger');
             }
         }
         
         // 显示搜索结果
         function displaySearchResults(results) {
             const container = document.getElementById('searchResults');
+            
+            // 保存当前搜索结果用于导出
+            window.currentSearchResults = results;
             
             if (results.length === 0) {
                 container.innerHTML = `
@@ -372,18 +581,26 @@
             
             let html = '';
             results.forEach((result, index) => {
+                const sourceBadge = result.source === 'hybrid' ? 'bg-success' : 
+                                  result.source === 'vector' ? 'bg-primary' : 'bg-info';
+                const sourceText = result.source === 'hybrid' ? '混合' : 
+                                 result.source === 'vector' ? '向量' : '关键词';
+                
                 html += `
                     <div class="result-item">
                         <div class="d-flex justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <h6 class="mb-1">
                                     <span class="badge bg-primary me-2">${index + 1}</span>
-                                    ${result.filename}
+                                    <span class="badge ${sourceBadge} me-2">${sourceText}</span>
+                                    ${result.filename || '未知文档'}
                                 </h6>
-                                <p class="mb-1 text-muted">${result.content.substring(0, 200)}...</p>
+                                <p class="mb-1 text-muted">${result.content}</p>
                                 <small class="text-muted">
-                                    相似度: ${(result.score * 100).toFixed(2)}% | 
-                                    排名: ${result.rank}
+                                    分数: ${(result.score * 100).toFixed(2)}% | 
+                                    来源: ${sourceText}
+                                    ${result.matched_keywords && result.matched_keywords.length > 0 ? 
+                                        ` | 匹配关键词: ${result.matched_keywords.join(', ')}` : ''}
                                 </small>
                             </div>
                         </div>

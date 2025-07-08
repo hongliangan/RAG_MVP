@@ -119,13 +119,14 @@ class VectorStore:
             self.index = None
             print("[vector_store] FAISS不可用，使用基础向量存储")
     
-    def add_document(self, file_path: str, chunks: List[str], embeddings: List[List[float]]) -> int:
+    def add_document(self, file_path: str, chunks: List[str], embeddings: List[List[float]], filename: Optional[str] = None) -> int:
         """
         添加文档到知识库
         
         :param file_path: 文档路径
         :param chunks: 文档分块列表
         :param embeddings: 对应的向量列表
+        :param filename: 原始文件名（可选，优先使用）
         :return: 文档ID
         """
         if len(chunks) != len(embeddings):
@@ -135,14 +136,14 @@ class VectorStore:
             cursor = conn.cursor()
             
             # 1. 添加文档记录
-            filename = os.path.basename(file_path)
-            file_type = os.path.splitext(filename)[1].lower()
+            db_filename = filename if filename else os.path.basename(file_path)
+            file_type = os.path.splitext(db_filename)[1].lower()
             file_size = os.path.getsize(file_path)
             
             cursor.execute("""
                 INSERT INTO documents (filename, file_path, file_type, file_size)
                 VALUES (?, ?, ?, ?)
-            """, (filename, file_path, file_type, file_size))
+            """, (db_filename, file_path, file_type, file_size))
             
             document_id = cursor.lastrowid
             if document_id is None:
@@ -169,7 +170,7 @@ class VectorStore:
         # 4. 更新向量索引
         self._update_index(embeddings)
         
-        print(f"[vector_store] 成功添加文档: {filename}，包含 {len(chunks)} 个文本块")
+        print(f"[vector_store] 成功添加文档: {db_filename}，包含 {len(chunks)} 个文本块")
         return document_id
     
     def _update_index(self, embeddings: List[List[float]]):

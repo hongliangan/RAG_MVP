@@ -1,0 +1,26 @@
+[
+  {
+    "query": "什么是RAG系统？",
+    "timestamp": "2025-07-08T13:19:09.726886",
+    "result_count": 1,
+    "query_hash": "261f6b36b945e58fa317a86c8388a597"
+  },
+  {
+    "query": "RAG系统有哪些组成部分？",
+    "timestamp": "2025-07-08T13:19:09.875894",
+    "result_count": 1,
+    "query_hash": "63fdf9350fb097f53e04a35d22053ce1"
+  },
+  {
+    "query": "RAG系统有什么优势？",
+    "timestamp": "2025-07-08T13:19:10.021939",
+    "result_count": 1,
+    "query_hash": "97e27737169e90fea9cd5d6710a76546"
+  },
+  {
+    "query": "RAG系统可以应用在哪些场景？",
+    "timestamp": "2025-07-08T13:19:10.169601",
+    "result_count": 1,
+    "query_hash": "87714a1ca87e5084c4bd7925157f59cc"
+  }
+]

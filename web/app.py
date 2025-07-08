@@ -9,13 +9,16 @@ from rag_core.embedding import embed_documents
 from rag_core.retriever import retrieve
 from rag_core.generator import generate_answer
 from rag_core.knowledge_base import KnowledgeBase, create_knowledge_base, list_knowledge_bases
+from rag_core.conversation_manager import get_conversation_manager
 from utils.config import get_llm_config, LLM_PROVIDER, get_retrieval_params
 from rag_core.llm_api import call_llm_api
 from utils.config import get_text_chunk_config
 import urllib.parse
+import re
 
 UPLOAD_FOLDER = "uploads"
-ALLOWED_EXTENSIONS = {"txt", "pdf", "docx"}
+# 支持更多文档格式
+ALLOWED_EXTENSIONS = {"txt", "pdf", "docx", "md", "html", "json", "csv", "xlsx", "xls"}
 
 app = Flask(__name__)
 app.secret_key = "rag_mvp_secret"
@@ -26,6 +29,30 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 def allowed_file(filename):
     return filename and "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def safe_filename(filename):
+    """
+    自定义安全的文件名处理函数
+    保留中文字符，但移除危险字符
+    """
+    if not filename:
+        return ""
+    
+    # 移除路径分隔符和危险字符，但保留中文字符
+    # 移除: / \ : * ? " < > |
+    filename = re.sub(r'[\/\\:*?"<>|]', '', filename)
+    
+    # 移除控制字符
+    filename = ''.join(char for char in filename if ord(char) >= 32)
+    
+    # 移除前后空格
+    filename = filename.strip()
+    
+    # 如果文件名为空，返回默认名
+    if not filename:
+        return "unnamed_file"
+    
+    return filename
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -39,7 +66,7 @@ def index():
             flash("未选择文件")
             return redirect(request.url)
         if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
+            filename = safe_filename(file.filename)
             if not filename:
                 flash("文件名无效")
                 return redirect(request.url)
@@ -149,7 +176,7 @@ def kb_add_document():
     
     try:
         # 保存上传的文件
-        filename = secure_filename(file.filename)
+        filename = safe_filename(file.filename)
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(file_path)
         
@@ -166,20 +193,106 @@ def kb_add_document():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
-@app.route("/kb/search")
+@app.route("/kb/search", methods=["POST"])
 def kb_search():
     """在知识库中搜索"""
-    kb_name = request.args.get("kb_name", "default")
-    query = request.args.get("query", "")
-    top_k = request.args.get("top_k", type=int, default=5)
+    kb_name = request.form.get("kb_name", "default")
+    query = request.form.get("query", "")
+    top_k = request.form.get("top_k", type=int, default=5)
+    use_enhanced = request.form.get("use_enhanced", "true").lower() == "true"
     
     if not query:
-        return jsonify({"success": False, "error": "查询不能为空"})
+        return jsonify({"success": False, "error": "查询内容不能为空"})
     
     try:
         kb = create_knowledge_base(kb_name)
-        results = kb.search(query, top_k=top_k)
-        return jsonify({"success": True, "results": results})
+        results = kb.search(query, top_k=top_k, use_enhanced=use_enhanced)
+        
+        return jsonify({
+            "success": True,
+            "results": results,
+            "count": len(results)
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/kb/suggestions", methods=["GET"])
+def kb_suggestions():
+    """获取搜索建议"""
+    kb_name = request.args.get("kb_name", "default")
+    query = request.args.get("query", "")
+    limit = request.args.get("limit", type=int, default=5)
+    
+    if not query or len(query) < 2:
+        return jsonify({"success": True, "suggestions": []})
+    
+    try:
+        kb = create_knowledge_base(kb_name)
+        suggestions = kb.get_search_suggestions(query, limit)
+        
+        return jsonify({
+            "success": True,
+            "suggestions": suggestions
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/kb/history", methods=["GET"])
+def kb_history():
+    """获取检索历史"""
+    kb_name = request.args.get("kb_name", "default")
+    limit = request.args.get("limit", type=int, default=20)
+    
+    try:
+        kb = create_knowledge_base(kb_name)
+        history = kb.get_search_history(limit)
+        
+        return jsonify({
+            "success": True,
+            "history": history
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/kb/clear_history", methods=["POST"])
+def kb_clear_history():
+    """清空检索历史"""
+    kb_name = request.form.get("kb_name", "default")
+    
+    try:
+        kb = create_knowledge_base(kb_name)
+        kb.clear_search_history()
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/kb/export_results", methods=["POST"])
+def kb_export_results():
+    """导出检索结果"""
+    kb_name = request.form.get("kb_name", "default")
+    results_json = request.form.get("results", "[]")
+    format = request.form.get("format", "json")
+    
+    try:
+        import json
+        results = json.loads(results_json)
+        
+        kb = create_knowledge_base(kb_name)
+        file_path = kb.export_search_results(results, format)
+        
+        if file_path:
+            return jsonify({
+                "success": True,
+                "file_path": file_path
+            })
+        else:
+            return jsonify({"success": False, "error": "导出失败"})
+        
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -218,6 +331,188 @@ def kb_clear():
         kb = create_knowledge_base(kb_name)
         success = kb.clear()
         return jsonify({"success": success})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+# ==================== 对话相关路由 ====================
+
+@app.route("/chat")
+def chat():
+    """对话页面"""
+    kb_name = request.args.get("kb_name", "default")
+    session_id = request.args.get("session_id")
+    
+    # 获取知识库列表
+    all_kbs = list_knowledge_bases()
+    
+    # 获取对话管理器
+    conv_manager = get_conversation_manager()
+    
+    # 获取对话列表
+    conversations = conv_manager.list_conversations(kb_name)
+    
+    return render_template("chat.html", 
+                         kb_name=kb_name,
+                         session_id=session_id,
+                         conversations=conversations,
+                         all_kbs=all_kbs)
+
+@app.route("/chat/create", methods=["POST"])
+def chat_create():
+    """创建新对话"""
+    kb_name = request.form.get("kb_name", "default")
+    
+    try:
+        conv_manager = get_conversation_manager()
+        conversation = conv_manager.create_conversation(kb_name)
+        
+        return jsonify({
+            "success": True,
+            "session_id": conversation.session_id,
+            "kb_name": conversation.kb_name
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/chat/send", methods=["POST"])
+def chat_send():
+    """发送消息"""
+    session_id = request.form.get("session_id")
+    message = request.form.get("message", "").strip()
+    kb_name = request.form.get("kb_name", "default")
+    
+    if not session_id or not message:
+        return jsonify({"success": False, "error": "缺少必要参数"})
+    
+    try:
+        conv_manager = get_conversation_manager()
+        
+        # 获取或创建对话
+        conversation = conv_manager.get_conversation(session_id)
+        if not conversation:
+            return jsonify({"success": False, "error": "对话不存在"})
+        
+        # 添加用户消息
+        conv_manager.add_message(session_id, "user", message)
+        
+        # 获取对话上下文
+        context = conv_manager.get_conversation_context(session_id)
+        
+        # 在知识库中搜索相关内容
+        kb = create_knowledge_base(kb_name)
+        search_results = kb.search(message, top_k=3, use_enhanced=True)
+        
+        # 构建增强的查询（包含上下文）
+        enhanced_query = message
+        if context:
+            enhanced_query = f"对话上下文：\n{context}\n\n当前问题：{message}"
+        
+        # 生成回答
+        if search_results:
+            # 构建检索到的内容
+            retrieved_content = "\n\n".join([
+                f"相关内容 {i+1}：{result['content']}"
+                for i, result in enumerate(search_results)
+            ])
+            
+            # 构建完整的prompt
+            prompt = f"""基于以下检索到的相关内容，回答用户的问题。
+
+检索到的相关内容：
+{retrieved_content}
+
+用户问题：{enhanced_query}
+
+请基于检索到的内容，结合对话上下文，给出准确、详细的回答。如果检索到的内容不足以回答问题，请说明情况。"""
+        else:
+            prompt = f"""用户问题：{enhanced_query}
+
+很抱歉，在知识库中没有找到与您问题相关的信息。请尝试换个方式提问，或者检查知识库中是否有相关文档。"""
+        
+        # 调用LLM生成回答
+        llm_config = get_llm_config()
+        # 直接传递参数，避免类型错误
+        response = call_llm_api(prompt, stream=False, **llm_config)
+        
+        # 添加助手回复
+        conv_manager.add_message(session_id, "assistant", response, {
+            'search_results': len(search_results),
+            'sources': [r.get('filename', '未知') for r in search_results]
+        })
+        
+        return jsonify({
+            "success": True,
+            "response": response,
+            "search_results": search_results,
+            "context": context
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/chat/list", methods=["GET"])
+def chat_list():
+    """获取对话列表"""
+    kb_name = request.args.get("kb_name")
+    
+    try:
+        conv_manager = get_conversation_manager()
+        conversations = conv_manager.list_conversations(kb_name)
+        return jsonify({"success": True, "conversations": conversations})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/chat/delete", methods=["POST"])
+def chat_delete():
+    """删除对话"""
+    session_id = request.form.get("session_id")
+    
+    if not session_id:
+        return jsonify({"success": False, "error": "缺少会话ID"})
+    
+    try:
+        conv_manager = get_conversation_manager()
+        success = conv_manager.delete_conversation(session_id)
+        return jsonify({"success": success})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/chat/export", methods=["POST"])
+def chat_export():
+    """导出对话"""
+    session_id = request.form.get("session_id")
+    format = request.form.get("format", "json")
+    
+    if not session_id:
+        return jsonify({"success": False, "error": "缺少会话ID"})
+    
+    try:
+        conv_manager = get_conversation_manager()
+        content = conv_manager.export_conversation(session_id, format)
+        
+        if content:
+            return jsonify({
+                "success": True,
+                "content": content,
+                "format": format
+            })
+        else:
+            return jsonify({"success": False, "error": "导出失败"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/chat/clear", methods=["POST"])
+def chat_clear():
+    """清空对话"""
+    kb_name = request.form.get("kb_name")
+    
+    try:
+        conv_manager = get_conversation_manager()
+        deleted_count = conv_manager.clear_conversations(kb_name)
+        return jsonify({
+            "success": True,
+            "deleted_count": deleted_count
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 

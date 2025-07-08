@@ -1,0 +1,14 @@
+[
+  {
+    "query": "测试",
+    "timestamp": "2025-07-08T13:08:00.469551",
+    "result_count": 3,
+    "query_hash": "db06c78d1e24cf708a14ce81c9b617ec"
+  },
+  {
+    "query": "测试",
+    "timestamp": "2025-07-08T13:08:11.023075",
+    "result_count": 3,
+    "query_hash": "db06c78d1e24cf708a14ce81c9b617ec"
+  }
+]
