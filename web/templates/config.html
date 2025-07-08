@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>系统设置 - RAG MVP</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .config-section {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .config-section h5 {
+            color: #495057;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 id="i18n-title">系统设置</h1>
+        <div>
+            <a href="/" class="btn btn-outline-primary" id="i18n-back-home">
+                <i class="fas fa-home"></i> 返回首页
+            </a>
+            <!-- 语言切换按钮 -->
+            <button class="btn btn-outline-secondary ms-2" id="i18n-lang-switch" onclick="toggleLang()">English</button>
+        </div>
+    </div>
+    <!-- 全局配置参数区（后续补充表单） -->
+    <div class="config-section">
+        <h5 id="i18n-global-params">全局参数</h5>
+        <form id="globalConfigForm">
+            <div class="mb-3">
+                <label for="llm_provider" class="form-label" id="i18n-llm-provider">LLM服务提供商
+                    <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="选择当前使用的大模型服务商。默认：硅基流动"></i>
+                </label>
+                <select class="form-select" id="llm_provider" name="llm_provider">
+                    <option value="siliconflow">硅基流动</option>
+                    <option value="openai">OpenAI</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="llm_api_key" class="form-label" id="i18n-api-key">API Key
+                    <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="用于访问大模型API的密钥。不同服务商需填写各自的Key。"></i>
+                </label>
+                <input type="text" class="form-control" id="llm_api_key" name="llm_api_key" placeholder="请输入API Key">
+            </div>
+            <div class="mb-3">
+                <label for="llm_model" class="form-label" id="i18n-model-name">模型名
+                    <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="指定使用的模型名称。例如：gpt-3.5-turbo 或 Tongyi-Zhiwen/QwenLong-L1-32B。默认：Tongyi-Zhiwen/QwenLong-L1-32B"></i>
+                </label>
+                <input type="text" class="form-control" id="llm_model" name="llm_model" placeholder="如 gpt-3.5-turbo 或 QwenLong-L1-32B">
+            </div>
+            <div class="mb-3">
+                <label for="api_url" class="form-label" id="i18n-api-url">API地址
+                    <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="大模型API的访问地址。默认：硅基流动 https://api.siliconflow.cn/v1/chat/completions"></i>
+                </label>
+                <input type="text" class="form-control" id="api_url" name="api_url" placeholder="如 https://api.openai.com/v1/chat/completions">
+            </div>
+            <div class="mb-3">
+                <label for="local_model_dir" class="form-label" id="i18n-local-model-dir">本地模型目录
+                    <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="本地大模型文件存放目录。默认：./models"></i>
+                </label>
+                <input type="text" class="form-control" id="local_model_dir" name="local_model_dir" placeholder="如 ./models">
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="prefer_local_model" name="prefer_local_model">
+                <label class="form-check-label" for="prefer_local_model" id="i18n-prefer-local-model">
+                    优先本地模型
+                    <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="启用后，优先使用本地模型进行推理，若不可用则自动切换云端。"></i>
+                </label>
+            </div>
+            <div class="mb-3">
+                <button type="button" class="btn btn-primary me-2" id="i18n-save" onclick="saveGlobalConfig()">保存设置</button>
+                <button type="button" class="btn btn-outline-warning me-2" id="i18n-restore" onclick="loadGlobalConfig()">恢复已保存</button>
+                <button type="button" class="btn btn-outline-secondary" id="i18n-reset" onclick="resetGlobalConfigToDefault()">恢复默认</button>
+            </div>
+        </form>
+        <div id="configMsg" class="mt-2"></div>
+    </div>
+    <script src="/static/i18n.js"></script>
+    <script>
+    // 自动加载全局配置
+    document.addEventListener('DOMContentLoaded', function() {
+        loadGlobalConfig();
+        // 启用所有tooltip
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+            new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+    // 加载全局配置
+    function loadGlobalConfig() {
+        fetch('/api/config/get').then(r => r.json()).then(res => {
+            if (res.success) {
+                const cfg = res.config;
+                document.getElementById('llm_provider').value = cfg.llm_provider || 'siliconflow';
+                // 兼容多服务结构
+                let provider = cfg.llm_provider || 'siliconflow';
+                let llm_cfg = (cfg.llm_configs && cfg.llm_configs[provider]) || {};
+                document.getElementById('llm_api_key').value = llm_cfg.api_key || '';
+                document.getElementById('llm_model').value = llm_cfg.model_name || '';
+                document.getElementById('api_url').value = llm_cfg.api_url || '';
+                document.getElementById('local_model_dir').value = cfg.local_model_dir || './models';
+                document.getElementById('prefer_local_model').checked = !!cfg.prefer_local_model;
+                showConfigMsg('已加载当前配置', 'info');
+            } else {
+                showConfigMsg('加载失败: ' + res.error, 'danger');
+            }
+        });
+    }
+    // 保存全局配置
+    function saveGlobalConfig() {
+        const provider = document.getElementById('llm_provider').value;
+        const config = {
+            llm_provider: provider,
+            llm_configs: {},
+            local_model_dir: document.getElementById('local_model_dir').value,
+            prefer_local_model: document.getElementById('prefer_local_model').checked
+        };
+        config.llm_configs[provider] = {
+            api_key: document.getElementById('llm_api_key').value,
+            model_name: document.getElementById('llm_model').value,
+            api_url: document.getElementById('api_url').value
+        };
+        // 清除旧高亮
+        document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        fetch('/api/config/set', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        }).then(r => r.json()).then(res => {
+            if (res.success) {
+                showConfigMsg('保存成功', 'success');
+            } else {
+                // 新增：后端参数校验失败友好展示
+                if (res.detail) {
+                    let msg = '参数校验失败：<br>';
+                    for (const [field, errors] of Object.entries(res.detail)) {
+                        msg += `<b>${field}</b>：${errors.join('，')}<br>`;
+                        // 高亮对应输入框
+                        let input = null;
+                        if (field === 'llm_api_key') input = document.getElementById('llm_api_key');
+                        else if (field === 'llm_model') input = document.getElementById('llm_model');
+                        else if (field === 'api_url') input = document.getElementById('api_url');
+                        else if (field === 'llm_provider') input = document.getElementById('llm_provider');
+                        else if (field === 'local_model_dir') input = document.getElementById('local_model_dir');
+                        else if (field === 'prefer_local_model') input = document.getElementById('prefer_local_model');
+                        if (input) input.classList.add('is-invalid');
+                    }
+                    showConfigMsg(msg, 'danger');
+                } else {
+                    showConfigMsg('保存失败: ' + res.error, 'danger');
+                }
+            }
+        });
+    }
+    // 恢复默认配置（仅前端重置为推荐值）
+    function resetGlobalConfigToDefault() {
+        document.getElementById('llm_provider').value = 'siliconflow';
+        document.getElementById('llm_api_key').value = '';
+        document.getElementById('llm_model').value = 'Tongyi-Zhiwen/QwenLong-L1-32B';
+        document.getElementById('api_url').value = 'https://api.siliconflow.cn/v1/chat/completions';
+        document.getElementById('local_model_dir').value = './models';
+        document.getElementById('prefer_local_model').checked = false;
+        showConfigMsg('已恢复为推荐默认值（需保存后生效）', 'info');
+    }
+    // 操作提示
+    function showConfigMsg(msg, type) {
+        const div = document.getElementById('configMsg');
+        div.innerHTML = `<div class="alert alert-${type} py-2 mb-0">${msg}</div>`;
+        setTimeout(() => { div.innerHTML = ''; }, 3000);
+    }
+    </script>
+</body>
+</html> 

@@ -70,5 +70,41 @@
     "timestamp": "2025-07-08T12:57:03.375265",
     "result_count": 3,
     "query_hash": "f068f0dad74789bee210163c40a4b50d"
+  },
+  {
+    "query": "什么是人工智能",
+    "timestamp": "2025-07-08T15:42:23.871933",
+    "result_count": 1,
+    "query_hash": "b82b2aea32df407023aad9825eb82b9c"
+  },
+  {
+    "query": "机器学习技术",
+    "timestamp": "2025-07-08T15:42:24.095423",
+    "result_count": 1,
+    "query_hash": "90926afd13868f3939f8435565128829"
+  },
+  {
+    "query": "深度学习神经网络",
+    "timestamp": "2025-07-08T15:42:24.321253",
+    "result_count": 1,
+    "query_hash": "b2b817bed0c71aaaf8b05c0c09c724ef"
+  },
+  {
+    "query": "自然语言处理",
+    "timestamp": "2025-07-08T15:42:24.545882",
+    "result_count": 3,
+    "query_hash": "f48c43f5fd14bfd8a5057a0131e7aa20"
+  },
+  {
+    "query": "计算机视觉应用",
+    "timestamp": "2025-07-08T15:42:24.776075",
+    "result_count": 1,
+    "query_hash": "3319c8ccdbab715063f717d47e3215c3"
+  },
+  {
+    "query": "人工智能",
+    "timestamp": "2025-07-08T15:42:25.213106",
+    "result_count": 3,
+    "query_hash": "f068f0dad74789bee210163c40a4b50d"
   }
 ]

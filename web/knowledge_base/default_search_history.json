@@ -76,5 +76,17 @@
     "timestamp": "2025-07-08T13:57:54.036382",
     "result_count": 5,
     "query_hash": "4d38a3f85441a4828349de4c381ad098"
+  },
+  {
+    "query": "今天星期几？",
+    "timestamp": "2025-07-08T14:16:13.863974",
+    "result_count": 0,
+    "query_hash": "8edc304656e055e83156737ee00d5b82"
+  },
+  {
+    "query": "xray是什么？",
+    "timestamp": "2025-07-08T15:51:39.086502",
+    "result_count": 3,
+    "query_hash": "ecf36b0061da6ca9cef5bb91ab78577d"
   }
 ]

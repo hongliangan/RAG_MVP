@@ -6,10 +6,15 @@ demo_chunk_config.py
 
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".")))
 
 from rag_core.knowledge_base import create_knowledge_base
-from utils.chunk_config import get_default_chunk_config, get_recommended_configs, validate_chunk_config
+from utils.chunk_config import (
+    get_default_chunk_config,
+    get_recommended_configs,
+    validate_chunk_config,
+)
 import tempfile
 import json
 
@@ -41,7 +46,6 @@ def create_test_documents():
 ### 3.2 卷积神经网络
 卷积神经网络（CNN）是一种专门用于处理网格结构数据（如图像）的神经网络架构。
         """,
-        
         "对话记录.txt": """
 用户: 你好，我想了解一下人工智能
 助手: 你好！人工智能是一个非常有趣的话题。你想了解哪个方面呢？
@@ -58,7 +62,6 @@ def create_test_documents():
 用户: 听起来很复杂
 助手: 确实，深度学习涉及很多复杂的数学概念。但不用担心，有很多优秀的入门资源可以帮助你理解这些概念。
         """,
-        
         "长篇小说.txt": """
 第一章 新的开始
 
@@ -124,7 +127,6 @@ def create_test_documents():
 
 他相信，只有通过深入的理解和思考，人类才能够与AI建立一种和谐的关系，共同创造一个更美好的未来。
         """,
-        
         "新闻文章.txt": """
 科技日报讯 记者昨日从国家人工智能实验室获悉，我国在人工智能领域取得重大突破，成功研发出新一代智能对话系统。
 
@@ -145,20 +147,20 @@ def create_test_documents():
 业内人士表示，该系统的成功研发是我国人工智能发展史上的一个重要里程碑。它不仅展示了我国在人工智能领域的实力，也为全球人工智能技术的发展做出了重要贡献。
 
 随着人工智能技术的不断发展，相信未来会有更多类似的突破性成果出现。这将为人类社会的进步和发展提供强大的技术支撑。
-        """
+        """,
     }
-    
+
     return documents
 
 
 def demo_basic_usage():
     """演示基本用法"""
     print("=== 演示基本用法 ===")
-    
+
     # 获取默认配置
     default_config = get_default_chunk_config()
     print(f"默认配置: {json.dumps(default_config, indent=2, ensure_ascii=False)}")
-    
+
     # 获取推荐配置
     recommended_configs = get_recommended_configs()
     print(f"\n推荐配置模板:")
@@ -169,23 +171,23 @@ def demo_basic_usage():
 def demo_config_validation():
     """演示配置验证"""
     print("\n=== 演示配置验证 ===")
-    
+
     # 有效配置
     valid_config = {
         "split_method": "character",
         "chunk_size": 1000,
         "chunk_overlap": 150,
-        "smart_split": True
+        "smart_split": True,
     }
     errors = validate_chunk_config(valid_config)
     print(f"有效配置验证结果: {errors}")
-    
+
     # 无效配置
     invalid_config = {
         "split_method": "character",
         "chunk_size": 50,  # 太小
         "chunk_overlap": 1000,  # 太大
-        "unknown_param": "value"  # 未知参数
+        "unknown_param": "value",  # 未知参数
     }
     errors = validate_chunk_config(invalid_config)
     print(f"无效配置验证结果: {errors}")
@@ -194,48 +196,50 @@ def demo_config_validation():
 def demo_document_processing():
     """演示文档处理"""
     print("\n=== 演示文档处理 ===")
-    
+
     # 创建测试文档
     documents = create_test_documents()
-    
+
     # 创建知识库
     kb = create_knowledge_base("demo_kb")
-    
+
     # 为不同类型的文档使用不同的配置
     configs = [
         ("技术文档.txt", get_recommended_configs()["技术文档"], "技术文档配置"),
         ("对话记录.txt", get_recommended_configs()["对话文本"], "对话文本配置"),
         ("长篇小说.txt", get_recommended_configs()["长文本"], "长文本配置"),
-        ("新闻文章.txt", get_recommended_configs()["新闻文章"], "新闻文章配置")
+        ("新闻文章.txt", get_recommended_configs()["新闻文章"], "新闻文章配置"),
     ]
-    
+
     for filename, config, config_name in configs:
         print(f"\n--- 处理 {filename} (使用 {config_name}) ---")
-        
+
         # 创建临时文件
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, encoding="utf-8"
+        ) as f:
             f.write(documents[filename])
             temp_file = f.name
-        
+
         try:
             # 添加文档
             result = kb.add_document(temp_file, chunk_config=config)
-            
-            if result['success']:
+
+            if result["success"]:
                 print(f"✅ 文档添加成功")
                 print(f"   文本块数量: {result['chunks_count']}")
                 print(f"   向量数量: {result['vectors_count']}")
                 print(f"   处理时间: {result['processing_time']:.2f}秒")
-                
+
                 # 测试搜索
                 search_results = kb.search("人工智能", top_k=2)
                 print(f"   搜索结果数量: {len(search_results)}")
-                
+
                 # 删除文档
-                kb.delete_document(result['document_id'])
+                kb.delete_document(result["document_id"])
             else:
                 print(f"❌ 文档添加失败: {result['error']}")
-        
+
         finally:
             # 清理临时文件
             if os.path.exists(temp_file):
@@ -245,20 +249,22 @@ def demo_document_processing():
 def demo_custom_config():
     """演示自定义配置"""
     print("\n=== 演示自定义配置 ===")
-    
+
     # 创建测试文档
     documents = create_test_documents()
     test_content = documents["技术文档.txt"]
-    
+
     # 创建临时文件
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False, encoding="utf-8"
+    ) as f:
         f.write(test_content)
         temp_file = f.name
-    
+
     try:
         # 创建知识库
         kb = create_knowledge_base("demo_custom_kb")
-        
+
         # 自定义配置：适合技术文档的精细配置
         custom_config = {
             "split_method": "paragraph",
@@ -269,40 +275,40 @@ def demo_custom_config():
             "smart_split": True,
             "preserve_formatting": True,
             "merge_short_chunks": True,
-            "merge_threshold": 0.4
+            "merge_threshold": 0.4,
         }
-        
+
         print(f"自定义配置: {json.dumps(custom_config, indent=2, ensure_ascii=False)}")
-        
+
         # 验证配置
         errors = validate_chunk_config(custom_config)
         if errors:
             print(f"配置验证警告: {errors}")
         else:
             print("✅ 配置验证通过")
-        
+
         # 添加文档
         result = kb.add_document(temp_file, chunk_config=custom_config)
-        
-        if result['success']:
+
+        if result["success"]:
             print(f"✅ 文档添加成功")
             print(f"   文本块数量: {result['chunks_count']}")
             print(f"   向量数量: {result['vectors_count']}")
             print(f"   处理时间: {result['processing_time']:.2f}秒")
-            
+
             # 测试搜索
             search_results = kb.search("机器学习", top_k=3)
             print(f"   搜索结果数量: {len(search_results)}")
-            
+
             # 显示搜索结果
             for i, result in enumerate(search_results[:2]):
                 print(f"   结果 {i+1}: {result['content'][:100]}...")
-            
+
             # 删除文档
-            kb.delete_document(search_results[0]['document_id'])
+            kb.delete_document(search_results[0]["document_id"])
         else:
             print(f"❌ 文档添加失败: {result['error']}")
-    
+
     finally:
         # 清理临时文件
         if os.path.exists(temp_file):
@@ -312,49 +318,61 @@ def demo_custom_config():
 def demo_config_comparison():
     """演示不同配置的效果对比"""
     print("\n=== 演示配置效果对比 ===")
-    
+
     # 创建测试文档
     documents = create_test_documents()
     test_content = documents["长篇小说.txt"]
-    
+
     # 创建临时文件
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False, encoding="utf-8"
+    ) as f:
         f.write(test_content)
         temp_file = f.name
-    
+
     try:
         # 创建知识库
         kb = create_knowledge_base("demo_comparison_kb")
-        
+
         # 对比不同配置
         configs = [
             ("默认配置", None),
-            ("字符数切片", {"split_method": "character", "chunk_size": 200, "chunk_overlap": 50}),
+            (
+                "字符数切片",
+                {"split_method": "character", "chunk_size": 200, "chunk_overlap": 50},
+            ),
             ("句子切片", {"split_method": "sentence", "max_sentences_per_chunk": 3}),
-            ("段落切片", {"split_method": "paragraph", "min_paragraph_length": 50, "max_paragraph_length": 1000})
+            (
+                "段落切片",
+                {
+                    "split_method": "paragraph",
+                    "min_paragraph_length": 50,
+                    "max_paragraph_length": 1000,
+                },
+            ),
         ]
-        
+
         for config_name, config in configs:
             print(f"\n--- {config_name} ---")
-            
+
             # 添加文档
             result = kb.add_document(temp_file, chunk_config=config)
-            
-            if result['success']:
+
+            if result["success"]:
                 print(f"   文本块数量: {result['chunks_count']}")
                 print(f"   向量数量: {result['vectors_count']}")
                 print(f"   处理时间: {result['processing_time']:.2f}秒")
-                
+
                 # 测试搜索
                 search_results = kb.search("人工智能", top_k=1)
                 if search_results:
                     print(f"   搜索结果: {search_results[0]['content'][:80]}...")
-                
+
                 # 删除文档
-                kb.delete_document(result['document_id'])
+                kb.delete_document(result["document_id"])
             else:
                 print(f"   ❌ 失败: {result['error']}")
-    
+
     finally:
         # 清理临时文件
         if os.path.exists(temp_file):
@@ -365,23 +383,23 @@ def main():
     """主演示函数"""
     print("🚀 开始演示文档级别的切片参数配置功能...")
     print("=" * 60)
-    
+
     try:
         # 基本用法演示
         demo_basic_usage()
-        
+
         # 配置验证演示
         demo_config_validation()
-        
+
         # 文档处理演示
         demo_document_processing()
-        
+
         # 自定义配置演示
         demo_custom_config()
-        
+
         # 配置效果对比演示
         demo_config_comparison()
-        
+
         print("\n" + "=" * 60)
         print("✅ 所有演示完成！")
         print("\n📝 总结:")
@@ -390,12 +408,13 @@ def main():
         print("3. 支持15+个可调参数，满足各种文档类型需求")
         print("4. 智能参数验证，确保配置有效性")
         print("5. Web界面支持实时参数调整和配置模板应用")
-        
+
     except Exception as e:
         print(f"❌ 演示失败: {e}")
         import traceback
+
         traceback.print_exc()
 
 
 if __name__ == "__main__":
-    main() 
+    main()
