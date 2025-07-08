@@ -23,10 +23,6 @@ __pycache__/
 .pytest_cache/
 .idea/
 .vscode/
+
+# 完全忽略models目录及其所有内容
 models/
-!models/README.md
-!models/*.txt
-!models/*.md
-!models/*/README.md
-!models/*/*.txt
-!models/*/*.md
