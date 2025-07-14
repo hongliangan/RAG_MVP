@@ -545,3 +545,28 @@ MODEL_PATH = "models/sentence-transformers/all-MiniLM-L6-v2"
 - 前端搜索结果渲染与错误提示优化。
 - 自动化测试用例健全，兼容多种边界场景。
 - 代码注释与健壮性提升。
+
+## v2.0_panda PandaWiki 整合说明
+
+- 支持与 PandaWiki 知识库系统自动/手动同步内容。
+- 首页一键同步 PandaWiki，实时展示同步进度与日志。
+- 首页支持智能问答输入框，自动选择 PandaWiki 知识库进行问答。
+- 后端 `/api/panda/sync` 支持详细同步日志，前端可视化。
+- 后端 APScheduler 定时自动同步 PandaWiki 内容。
+- `/api/panda/kb_list` 提供本地 PandaWiki 知识库列表，前端问答自动选择。
+- 代码注释完善，便于二次开发。
+
+### 用法
+
+1. 在首页点击“同步 PandaWiki 知识库”按钮，可实时同步并查看进度。
+2. 在首页输入问题，点击“智能问答”，即可基于 PandaWiki 知识库获得答案。
+3. 后端每小时自动同步 PandaWiki 内容。
+4. 可通过 `/api/panda/sync`、`/api/panda/kb_list` 等接口进行二次开发。
+
+### 依赖
+- 需安装 apscheduler（已自动加入 requirements.txt）
+
+### 代码结构
+- `web/panda_integration.py`：PandaWiki 对接核心逻辑，内容同步与问答适配。
+- `web/app.py`：API 路由注册、定时任务、同步日志。
+- `web/templates/index.html`：首页入口、同步进度、智能问答。

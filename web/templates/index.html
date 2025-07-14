@@ -196,6 +196,49 @@
 
         <button type="submit" class="btn btn-primary btn-lg">🚀 开始处理</button>
     </form>
+    <button id="pandaSyncBtn" class="btn btn-primary mt-3">同步 PandaWiki 知识库</button>
+    <div id="pandaSyncLog" style="white-space:pre;max-height:200px;overflow:auto;"></div>
+    <div class="input-group mt-4">
+      <input id="pandaQ" class="form-control" placeholder="向 PandaWiki 知识库提问...">
+      <button id="pandaAskBtn" class="btn btn-success">智能问答</button>
+    </div>
+    <div id="pandaA" class="mt-2"></div>
+    <script>
+    $(function() {
+        $('#pandaSyncBtn').click(function() {
+            $('#pandaSyncLog').text('同步中...');
+            $(this).prop('disabled', true).text('同步中...');
+            $.post('/api/panda/sync', function(res) {
+                if(res.success) {
+                    $('#pandaSyncLog').text(res.logs.join('\n'));
+                    alert('同步成功！');
+                } else {
+                    $('#pandaSyncLog').text('');
+                    alert('同步失败: ' + (res.error || '未知错误'));
+                }
+                $('#pandaSyncBtn').prop('disabled', false).text('同步 PandaWiki 知识库');
+            });
+        });
+        $('#pandaAskBtn').click(function() {
+            var q = $('#pandaQ').val();
+            if(!q) return;
+            $('#pandaA').text('思考中...');
+            // 默认用 panda_sync 目录下第一个知识库
+            $.get('/api/panda/kb_list', function(kbs) {
+                var kb_id = (kbs[0] && kbs[0].id) || 'default';
+                $.ajax({
+                    url: '/api/ai/answer',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({question: q, kb_id: kb_id}),
+                    success: function(res) {
+                        $('#pandaA').text(res.answer || '无答案');
+                    }
+                });
+            });
+        });
+    });
+    </script>
 
     <script>
     function onSplitMethodChange() {

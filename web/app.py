@@ -22,6 +22,8 @@ import urllib.parse
 import re
 from utils.config import load_global_config, save_global_config
 from utils.chunk_config import validate_chunk_config
+from web.panda_integration import panda_bp, sync_pandawiki_kb
+from apscheduler.schedulers.background import BackgroundScheduler
 
 UPLOAD_FOLDER = "uploads"
 # 支持更多文档格式
@@ -33,6 +35,8 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+
+app.register_blueprint(panda_bp)
 
 
 def allowed_file(filename):
@@ -904,6 +908,35 @@ def api_set_config():
     except Exception as e:
         print("[api_set_config] exception:", e)
         return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/panda/sync', methods=['POST'])
+def api_panda_sync():
+    try:
+        logs = []
+        def log(msg):
+            logs.append(msg)
+        sync_pandawiki_kb(log=log)
+        return {"success": True, "msg": "同步完成", "logs": logs}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.route('/api/panda/kb_list', methods=['GET'])
+def api_panda_kb_list():
+    kb_root = 'knowledge_base/documents/panda_sync'
+    if not os.path.exists(kb_root):
+        return []
+    kb_list = [
+        {"id": d, "name": d}
+        for d in os.listdir(kb_root)
+        if os.path.isdir(os.path.join(kb_root, d))
+    ]
+    return kb_list
+
+# 定时自动同步 PandaWiki
+scheduler = BackgroundScheduler()
+scheduler.add_job(lambda: sync_pandawiki_kb(log=None), 'interval', hours=1)
+scheduler.start()
 
 
 if __name__ == "__main__":
