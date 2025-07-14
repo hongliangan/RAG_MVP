@@ -85,3 +85,31 @@ Pipfile.lock
 # 本地配置文件
 config.local.py
 settings.local.py
+
+# 知识库数据
+knowledge_base/
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# 对话数据
+conversations/
+chat_data/
+
+# 向量数据库
+vector_store/
+embeddings/
+
+# 测试数据
+test_data/
+sample_data/
+demo_data/
+
+# 缓存文件
+.cache/
+__pycache__/
+*.pyc
+
+# 临时上传文件
+temp_uploads/

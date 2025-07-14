@@ -2,7 +2,9 @@
 generator.py
 生成模块，调用LLM API生成答案。
 """
+
 from rag_core.llm_api import call_llm_api
+
 
 def generate_answer(query, relevant_docs, llm_model=None, **kwargs):
     """

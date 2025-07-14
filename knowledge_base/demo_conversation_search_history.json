@@ -1,0 +1,38 @@
+[
+  {
+    "query": "什么是人工智能？",
+    "timestamp": "2025-07-08T13:20:30.790000",
+    "result_count": 1,
+    "query_hash": "b70c5ed43df2e11f2dcd74f89146ad37"
+  },
+  {
+    "query": "什么是人工智能？",
+    "timestamp": "2025-07-08T13:20:49.783106",
+    "result_count": 1,
+    "query_hash": "b70c5ed43df2e11f2dcd74f89146ad37"
+  },
+  {
+    "query": "AI有哪些主要类型？",
+    "timestamp": "2025-07-08T13:21:09.333148",
+    "result_count": 1,
+    "query_hash": "2236b18b9199bbd0756516995642333b"
+  },
+  {
+    "query": "AI在哪些领域有应用？",
+    "timestamp": "2025-07-08T13:21:19.231481",
+    "result_count": 1,
+    "query_hash": "8399bc3613e42423b2d49ca378b0521b"
+  },
+  {
+    "query": "AI的发展趋势是什么？",
+    "timestamp": "2025-07-08T13:21:39.882413",
+    "result_count": 1,
+    "query_hash": "09e129fb3ad9901496243f5d4d9994a3"
+  },
+  {
+    "query": "你能总结一下我们刚才的对话吗？",
+    "timestamp": "2025-07-08T13:22:00.391691",
+    "result_count": 1,
+    "query_hash": "caf8fc29ae972a4aa9cbd500c5cef468"
+  }
+]

@@ -5,9 +5,10 @@
 import os
 from rag_core.text_splitter import TextSplitter, split_text
 
+
 def test_text_splitting():
     """测试不同的文本切片方式"""
-    
+
     # 测试文本
     test_text = """
     人工智能（Artificial Intelligence，AI）是计算机科学的一个分支，它企图了解智能的实质，并生产出一种新的能以人类智能相似的方式做出反应的智能机器。
@@ -22,10 +23,10 @@ def test_text_splitting():
 
     机器学习是人工智能的核心技术之一，它使计算机能够在没有明确编程的情况下学习和改进。机器学习算法通过分析大量数据来识别模式，并基于这些模式做出预测或决策。
     """
-    
+
     print("=== 文本切片器测试 ===\n")
     print(f"原始文本长度: {len(test_text)} 字符\n")
-    
+
     # 测试1: 按段落分割（默认）
     print("1. 按段落分割（默认配置）:")
     config1 = {"split_method": "paragraph"}
@@ -35,34 +36,27 @@ def test_text_splitting():
     for i, chunk in enumerate(chunks1[:3], 1):  # 只显示前3个块
         print(f"   块 {i}: {len(chunk)} 字符 - {chunk[:50]}...")
     print()
-    
+
     # 测试2: 按字符数分割
     print("2. 按字符数分割（chunk_size=500, overlap=100）:")
-    config2 = {
-        "split_method": "character",
-        "chunk_size": 500,
-        "chunk_overlap": 100
-    }
+    config2 = {"split_method": "character", "chunk_size": 500, "chunk_overlap": 100}
     splitter2 = TextSplitter(config2)
     chunks2 = splitter2.split_text(test_text)
     print(f"   分割结果: {len(chunks2)} 个块")
     for i, chunk in enumerate(chunks2[:3], 1):
         print(f"   块 {i}: {len(chunk)} 字符 - {chunk[:50]}...")
     print()
-    
+
     # 测试3: 按句子分割
     print("3. 按句子分割（max_sentences_per_chunk=3）:")
-    config3 = {
-        "split_method": "sentence",
-        "max_sentences_per_chunk": 3
-    }
+    config3 = {"split_method": "sentence", "max_sentences_per_chunk": 3}
     splitter3 = TextSplitter(config3)
     chunks3 = splitter3.split_text(test_text)
     print(f"   分割结果: {len(chunks3)} 个块")
     for i, chunk in enumerate(chunks3[:3], 1):
         print(f"   块 {i}: {len(chunk)} 字符 - {chunk[:50]}...")
     print()
-    
+
     # 测试4: 自定义过滤条件
     print("4. 自定义过滤条件（min_length=100, max_length=800）:")
     config4 = {
@@ -70,7 +64,7 @@ def test_text_splitting():
         "chunk_size": 600,
         "chunk_overlap": 150,
         "min_chunk_length": 100,
-        "max_chunk_length": 800
+        "max_chunk_length": 800,
     }
     splitter4 = TextSplitter(config4)
     chunks4 = splitter4.split_text(test_text)
@@ -78,7 +72,7 @@ def test_text_splitting():
     for i, chunk in enumerate(chunks4[:3], 1):
         print(f"   块 {i}: {len(chunk)} 字符 - {chunk[:50]}...")
     print()
-    
+
     # 测试5: 便捷函数
     print("5. 使用便捷函数 split_text():")
     chunks5 = split_text(test_text, {"split_method": "character", "chunk_size": 400})
@@ -87,34 +81,37 @@ def test_text_splitting():
         print(f"   块 {i}: {len(chunk)} 字符 - {chunk[:50]}...")
     print()
 
+
 def test_environment_variables():
     """测试环境变量配置"""
     print("=== 环境变量配置测试 ===\n")
-    
+
     # 设置环境变量
     os.environ["TEXT_SPLIT_METHOD"] = "character"
     os.environ["TEXT_CHUNK_SIZE"] = "300"
     os.environ["TEXT_CHUNK_OVERLAP"] = "50"
-    
+
     from utils.config import get_text_chunk_config
+
     config = get_text_chunk_config()
-    
+
     print("当前配置:")
     for key, value in config.items():
         print(f"  {key}: {value}")
     print()
-    
+
     # 使用环境变量配置进行测试
     test_text = "这是一个测试文本，用来验证环境变量配置是否正常工作。我们将使用字符分割方式，每个块300字符，重叠50字符。"
-    
+
     splitter = TextSplitter(config)
     chunks = splitter.split_text(test_text)
-    
+
     print(f"测试结果: {len(chunks)} 个块")
     for i, chunk in enumerate(chunks, 1):
         print(f"  块 {i}: {len(chunk)} 字符 - {chunk}")
 
+
 if __name__ == "__main__":
     test_text_splitting()
-    print("\n" + "="*50 + "\n")
-    test_environment_variables() 
+    print("\n" + "=" * 50 + "\n")
+    test_environment_variables()

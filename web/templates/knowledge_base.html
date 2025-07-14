@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识库管理 - RAG MVP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <style>
+        .kb-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #f8f9fa;
+        }
+        .document-item {
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: white;
+        }
+        .search-results {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .result-item {
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .nav-tabs .nav-link {
+            color: #495057;
+        }
+        .nav-tabs .nav-link.active {
+            color: #007bff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            <div class="col-md-3 bg-light p-3">
+                <h4 id="i18n-kb-manage"><i class="fas fa-database"></i> 知识库管理</h4>
+                <hr>
+                
+                <!-- 知识库选择 -->
+                <div class="mb-3">
+                    <label class="form-label">选择知识库:</label>
+                    <select class="form-select" id="kbSelector" onchange="changeKnowledgeBase()">
+                        {% for kb in all_kbs %}
+                        <option value="{{ kb }}" {% if kb == kb_name %}selected{% endif %}>{{ kb }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- 统计信息 -->
+                <div class="stats-card">
+                    <h6><i class="fas fa-chart-bar"></i> 统计信息</h6>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="h4">{{ stats.document_count or 0 }}</div>
+                            <small>文档</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="h4">{{ stats.vector_count or 0 }}</div>
+                            <small>向量</small>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small>索引类型: {{ stats.index_type or 'Unknown' }}</small>
+                    </div>
+                </div>
+                
+                <!-- 快速操作 -->
+                <div class="mb-3">
+                    <button class="btn btn-outline-danger btn-sm w-100" onclick="clearKnowledgeBase()">
+                        <i class="fas fa-trash"></i> 清空知识库
+                    </button>
+                </div>
+                
+                <!-- 导航链接 -->
+                <div class="list-group">
+                    <a href="/" class="list-group-item list-group-item-action">
+                        <i class="fas fa-home"></i> 返回首页
+                    </a>
+                </div>
+            </div>
+            
+            <!-- 主内容区 -->
+            <div class="col-md-9 p-3">
+                <!-- 顶部语言切换按钮 -->
+                <div class="d-flex justify-content-end mb-2">
+                    <button class="btn btn-outline-secondary btn-sm" id="i18n-lang-switch" onclick="toggleLang()">English</button>
+                </div>
+                <!-- 标签页导航 -->
+                <ul class="nav nav-tabs" id="kbTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="documents-tab" data-bs-toggle="tab" data-bs-target="#documents" type="button" role="tab">
+                            <i class="fas fa-file-alt"></i> <span id="i18n-doc-manage">文档管理</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="search-tab" data-bs-toggle="tab" data-bs-target="#search" type="button" role="tab">
+                            <i class="fas fa-search"></i> <span id="i18n-kb-search">知识库搜索</span>
+                        </button>
+                    </li>
+                </ul>
+                
+                <!-- 标签页内容 -->
+                <div class="tab-content" id="kbTabContent">
+                    <!-- 文档管理标签页 -->
+                    <div class="tab-pane fade show active" id="documents" role="tabpanel">
+                        <div class="kb-card">
+                            <h5><i class="fas fa-upload"></i> <span id="i18n-add-doc">添加文档</span></h5>
+                            <form id="uploadForm" enctype="multipart/form-data">
+                                <div class="row mb-3">
+                                    <div class="col-md-8">
+                                        <input type="file" class="form-control" id="documentFile" name="file" accept=".txt,.pdf,.docx,.md,.html,.json,.csv,.xlsx,.xls" required>
+                                        <small class="form-text text-muted">
+                                            支持格式: TXT, PDF, DOCX, Markdown, HTML, JSON, CSV, Excel
+                                        </small>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button type="button" class="btn btn-outline-secondary w-100" onclick="toggleChunkConfig()">
+                                            <i class="fas fa-cog"></i> 切片参数配置
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- 新增 embedding 方式选择 -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Embedding 方式</label>
+                                        <select class="form-select" id="embeddingProvider" name="embedding_provider">
+                                            <option value="">跟随全局设置</option>
+                                            <option value="local">本地</option>
+                                            <option value="online">在线（SiliconFlow）</option>
+                                        </select>
+                                        <small class="form-text text-muted">可为当前文档单独指定 embedding 方式</small>
+                                    </div>
+                                </div>
+                                
+                                <!-- 切片参数配置区域 -->
+                                <div id="chunkConfigArea" style="display: none;">
+                                    <div class="card">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0"><i class="fas fa-sliders-h"></i> <span id="i18n-chunk-config">文档切片参数配置</span></h6>
+                                            <button type="button" class="btn btn-outline-warning btn-sm" onclick="resetChunkConfigToDefault()">
+                                                <i class="fas fa-undo"></i> <span id="i18n-reset-chunk">恢复默认</span>
+                                            </button>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- 基础配置 -->
+                                            <div class="row mb-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">切片方式
+                                                        <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" id="i18n-split-method-tip" title=""></i>
+                                                    </label>
+                                                    <select class="form-select" id="splitMethod" onchange="updateParameterVisibility()">
+                                                        <option value="paragraph" id="i18n-paragraph">按段落切片</option>
+                                                        <option value="character" id="i18n-character">按字符数切片</option>
+                                                        <option value="sentence" id="i18n-sentence">按句子切片</option>
+                                                    </select>
+                                                    <small class="form-text text-muted" id="i18n-split-method-desc"></small>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">推荐配置模板
+                                                        <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" id="i18n-config-template-tip" title=""></i>
+                                                    </label>
+                                                    <select class="form-select" id="configTemplate" onchange="loadConfigTemplate()">
+                                                        <option value="">自定义配置</option>
+                                                        <option value="通用文档">通用文档</option>
+                                                        <option value="长文本">长文本</option>
+                                                        <option value="对话文本">对话文本</option>
+                                                        <option value="技术文档">技术文档</option>
+                                                        <option value="新闻文章">新闻文章</option>
+                                                    </select>
+                                                    <small class="form-text text-muted" id="i18n-config-template-desc"></small>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 字符数切片参数 -->
+                                            <div id="characterParams" class="parameter-group" style="display: none;">
+                                                <h6>字符数切片参数</h6>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">块大小 (字符)
+                                                            <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="每个文本块的最大字符数。建议500-1500，默认800。"></i>
+                                                        </label>
+                                                        <input type="number" class="form-control" id="chunkSize" name="chunk_size" value="800" min="100" max="3000" step="50">
+                                                        <small class="form-text text-muted">每个文本块的最大字符数</small>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">重叠大小 (字符)
+                                                            <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="相邻文本块的重叠字符数。建议为块大小的10-20%，默认100。"></i>
+                                                        </label>
+                                                        <input type="number" class="form-control" id="chunkOverlap" name="chunk_overlap" value="100" min="0" max="500" step="10">
+                                                        <small class="form-text text-muted">相邻文本块的重叠字符数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 句子切片参数 -->
+                                            <div id="sentenceParams" class="parameter-group" style="display: none;">
+                                                <h6>句子切片参数</h6>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">每块最大句子数
+                                                            <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="每个文本块包含的最大句子数。建议2-5句，默认3。"></i>
+                                                        </label>
+                                                        <input type="number" class="form-control" id="maxSentencesPerChunk" name="max_sentences_per_chunk" value="3" min="1" max="10" step="1">
+                                                        <small class="form-text text-muted">每个文本块包含的最大句子数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 段落切片参数 -->
+                                            <div id="paragraphParams" class="parameter-group">
+                                                <h6>段落切片参数</h6>
+                                                <div class="row">
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">最小段落长度
+                                                            <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="过滤过短的段落，避免无意义文本块。建议10-100，默认30。"></i>
+                                                        </label>
+                                                        <input type="number" class="form-control" id="minParagraphLength" name="min_paragraph_length" value="30" min="10" max="200" step="5">
+                                                        <small class="form-text text-muted">最小段落长度（字符）</small>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">最大段落长度
+                                                            <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="超过此长度的段落会被分割。建议1000-2000，默认1500。"></i>
+                                                        </label>
+                                                        <input type="number" class="form-control" id="maxParagraphLength" name="max_paragraph_length" value="1500" min="500" max="3000" step="100">
+                                                        <small class="form-text text-muted">最大段落长度（字符）</small>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">段落分隔符
+                                                            <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="用于识别段落边界，支持正则。默认：\n\n"></i>
+                                                        </label>
+                                                        <input type="text" class="form-control" id="paragraphSeparator" name="paragraph_separator" value="\n\n">
+                                                        <small class="form-text text-muted">段落分隔符</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 通用过滤参数 -->
+                                            <div class="row mb-3">
+                                                <div class="col-12">
+                                                    <h6>通用过滤参数</h6>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label">最小块长度
+                                                        <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="过滤过短的文本块，提高检索质量。建议5-100，默认20。"></i>
+                                                    </label>
+                                                    <input type="number" class="form-control" id="minChunkLength" name="min_chunk_length" value="20" min="5" max="100" step="5">
+                                                    <small class="form-text text-muted" id="i18n-min-chunk-desc"></small>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label">最大块长度
+                                                        <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="超过此长度的文本块会被分割。建议1000-5000，默认3000。"></i>
+                                                    </label>
+                                                    <input type="number" class="form-control" id="maxChunkLength" name="max_chunk_length" value="3000" min="1000" max="5000" step="100">
+                                                    <small class="form-text text-muted" id="i18n-max-chunk-desc"></small>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check mt-4">
+                                                        <input class="form-check-input" type="checkbox" id="removeEmptyChunks" name="remove_empty_chunks" checked>
+                                                        <label class="form-check-label" for="removeEmptyChunks">
+                                                            移除空块
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check mt-4">
+                                                        <input class="form-check-input" type="checkbox" id="removeWhitespaceOnly" name="remove_whitespace_only" checked>
+                                                        <label class="form-check-label" for="removeWhitespaceOnly">
+                                                            移除空白块
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 高级参数 -->
+                                            <div class="row mb-3">
+                                                <div class="col-12">
+                                                    <h6>高级参数</h6>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="smartSplit" name="smart_split" checked>
+                                                        <label class="form-check-label" for="smartSplit">
+                                                            智能分割
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="preserveFormatting" name="preserve_formatting">
+                                                        <label class="form-check-label" for="preserveFormatting">
+                                                            保留格式
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="mergeShortChunks" name="merge_short_chunks" checked>
+                                                        <label class="form-check-label" for="mergeShortChunks">
+                                                            合并短块
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label">合并阈值
+                                                        <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="小于最小块长度的此倍数时尝试合并。建议0.1-0.8，默认0.3。"></i>
+                                                    </label>
+                                                    <input type="number" class="form-control" id="mergeThreshold" name="merge_threshold" value="0.3" min="0.1" max="0.8" step="0.1">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <button type="submit" class="btn btn-primary" id="i18n-upload">
+                                            <i class="fas fa-plus"></i> <span id="i18n-upload-text">添加文档</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        
+                        <!-- 文档列表 -->
+                        <div class="kb-card">
+                            <h5><i class="fas fa-list"></i> <span id="i18n-doc-list">文档列表</span></h5>
+                            <div id="documentList">
+                                {% if documents %}
+                                    {% for doc in documents %}
+                                    <div class="document-item">
+                                        <div class="row align-items-center">
+                                            <div class="col-md-8">
+                                                <h6 class="mb-1">{{ doc.filename }}</h6>
+                                                <small class="text-muted">
+                                                    大小: {{ doc.file_size }} bytes | 
+                                                    创建时间: {{ doc.created_at }}
+                                                </small>
+                                            </div>
+                                            <div class="col-md-4 text-end">
+                                                <button class="btn btn-sm btn-outline-danger" onclick="deleteDocument({{ doc.id }})" id="i18n-delete">
+                                                    <i class="fas fa-trash"></i> <span id="i18n-delete-text">删除</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="text-center text-muted py-4">
+                                        <i class="fas fa-inbox fa-3x mb-3"></i>
+                                        <p>暂无文档</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 搜索标签页 -->
+                    <div class="tab-pane fade" id="search" role="tabpanel">
+                        <div class="kb-card">
+                            <h5><i class="fas fa-search"></i> <span id="i18n-enhanced-search">增强知识库搜索</span></h5>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control" id="searchQuery" placeholder="输入搜索查询..." list="searchSuggestions">
+                                    <datalist id="searchSuggestions"></datalist>
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="number" class="form-control" id="topK" value="5" min="1" max="20" placeholder="Top K">
+                                </div>
+                                <div class="col-md-2">
+                                    <select class="form-select" id="searchType">
+                                        <option value="enhanced">增强搜索</option>
+                                        <option value="basic">基础搜索</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 d-flex align-items-center">
+                                    <button class="btn btn-primary w-100 me-2" onclick="searchKnowledgeBase()" id="i18n-search">
+                                        <i class="fas fa-search"></i> <span id="i18n-search-text">搜索</span>
+                                    </button>
+                                    <!-- 新增：恢复默认按钮 -->
+                                    <button class="btn btn-outline-warning btn-sm" onclick="resetRetrievalConfigToDefault()">
+                                        <i class="fas fa-undo"></i> 恢复默认
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- 搜索选项 -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="useEnhanced" checked>
+                                        <label class="form-check-label" for="useEnhanced">
+                                            使用混合检索（向量+关键词）
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 text-end">
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="loadSearchHistory()" id="i18n-search-history">
+                                        <i class="fas fa-history"></i> <span id="i18n-search-history-text">搜索历史</span>
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="clearSearchHistory()" id="i18n-clear-history">
+                                        <i class="fas fa-trash"></i> <span id="i18n-clear-history-text">清空历史</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 搜索结果 -->
+                        <div class="kb-card">
+                            <h5><i class="fas fa-list-alt"></i> <span id="i18n-search-result">搜索结果</span></h5>
+                            <div class="mb-3">
+                                <button class="btn btn-outline-success btn-sm" onclick="exportResults('json')" id="i18n-export-json">
+                                    <i class="fas fa-download"></i> <span id="i18n-export-json-text">导出JSON</span>
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" onclick="exportResults('txt')" id="i18n-export-txt">
+                                    <i class="fas fa-download"></i> <span id="i18n-export-txt-text">导出TXT</span>
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" onclick="exportResults('csv')" id="i18n-export-csv">
+                                    <i class="fas fa-download"></i> <span id="i18n-export-csv-text">导出CSV</span>
+                                </button>
+                            </div>
+                            <div id="searchResults" class="search-results">
+                                <div class="text-center text-muted py-4">
+                                    <i class="fas fa-search fa-3x mb-3"></i>
+                                    <p>输入查询开始搜索</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载提示模态框 -->
+    <div class="modal fade" id="loadingModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-body text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2" id="loadingText">处理中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/i18n.js"></script>
+    <script>
+        // 全局变量
+        let currentKbName = '{{ kb_name }}';
+        // 获取当前语言
+        function getLang() {
+            return window.currentLang || 'zh';
+        }
+        // i18n文本格式化
+        function i18n(key, vars) {
+            let str = i18nDict[getLang()][key] || key;
+            if (vars) for (const k in vars) str = str.replace(`{${k}}`, vars[k]);
+            return str;
+        }
+        // 切换知识库
+        function changeKnowledgeBase() {
+            const kbName = document.getElementById('kbSelector').value;
+            window.location.href = `/knowledge_base?kb_name=${kbName}`;
+        }
+        // 显示加载提示
+        function showLoading(text) {
+            document.getElementById('loadingText').textContent = text || i18n('loading');
+            new bootstrap.Modal(document.getElementById('loadingModal')).show();
+        }
+        // 隐藏加载提示
+        function hideLoading() {
+            const modalEl = document.getElementById('loadingModal');
+            try {
+                const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modalInstance.hide();
+            } catch (e) {}
+            modalEl.classList.remove('show');
+            modalEl.style.display = 'none';
+            modalEl.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('modal-open');
+            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+        }
+        // 显示消息
+        function showMessage(message, type = 'success') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('.container-fluid').insertBefore(alertDiv, document.querySelector('.row'));
+            setTimeout(() => { if (alertDiv.parentNode) alertDiv.remove(); }, 3000);
+        }
+        // 添加文档
+        $(function() {
+            $('#uploadForm').on('submit', function(e) {
+                e.preventDefault();
+                var formData = new FormData(this);
+                var embeddingProvider = $('#embeddingProvider').val();
+                if (embeddingProvider) {
+                    formData.append('embedding_provider', embeddingProvider);
+                }
+                $.ajax({
+                    url: '/kb/add_document',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(res) {
+                        console.log('上传响应:', res);
+                        if (res.success) {
+                            alert('文档添加成功！');
+                            location.reload();
+                        } else {
+                            // 新增：友好提示后端 error 字段
+                            if (res.error && res.error.indexOf('已自动清空知识库') !== -1) {
+                                alert(res.error + '\n请重新上传文档。');
+                            } else {
+                                alert('添加失败：' + (res.error || '未知错误'));
+                            }
+                        }
+                    },
+                    error: function() {
+                        alert('网络错误，添加失败');
+                    }
+                });
+            });
+        });
+        // 删除文档
+        async function deleteDocument(docId) {
+            if (!confirm(i18n('delConfirm'))) return;
+            showLoading(i18n('deleting') || i18n('loading'));
+            try {
+                const formData = new FormData();
+                formData.append('kb_name', currentKbName);
+                formData.append('doc_id', docId);
+                const response = await fetch('/kb/delete_document', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(i18n('delSuccess'), 'success');
+                    setTimeout(() => { window.location.reload(); }, 1000);
+                } else {
+                    showMessage(i18n('delFail', {error: result.error}), 'danger');
+                }
+            } catch (error) {
+                showMessage(i18n('requestFail', {error: error.message}), 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+        // 搜索知识库
+        async function searchKnowledgeBase() {
+            const query = document.getElementById('searchQuery').value.trim();
+            const topK = document.getElementById('topK').value;
+            const useEnhanced = document.getElementById('useEnhanced').checked;
+            if (!query) {
+                showMessage(i18n('searchEmpty'), 'warning');
+                return;
+            }
+            showLoading(i18n('searching'));
+            try {
+                const formData = new FormData();
+                formData.append('kb_name', currentKbName);
+                formData.append('query', query);
+                formData.append('top_k', topK);
+                formData.append('use_enhanced', useEnhanced);
+                const response = await fetch('/kb/search', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (result.success) {
+                    displaySearchResults(result.results);
+                    updateSearchSuggestions(query);
+                } else {
+                    showMessage(i18n('searchFail', {error: result.error}), 'danger');
+                }
+            } catch (error) {
+                showMessage(i18n('requestFail', {error: error.message}), 'danger');
+            } finally {
+                setTimeout(hideLoading, 100);
+            }
+        }
+        // 更新搜索建议
+        async function updateSearchSuggestions(query) {
+            if (query.length < 2) return;
+            try {
+                const response = await fetch(`/kb/suggestions?kb_name=${currentKbName}&query=${encodeURIComponent(query)}`);
+                const result = await response.json();
+                if (result.success) {
+                    const datalist = document.getElementById('searchSuggestions');
+                    datalist.innerHTML = '';
+                    result.suggestions.forEach(suggestion => {
+                        const option = document.createElement('option');
+                        option.value = suggestion;
+                        datalist.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                // 可选：showMessage(i18n('requestFail', {error: error.message}), 'warning');
+            }
+        }
+        // 加载搜索历史
+        async function loadSearchHistory() {
+            try {
+                const response = await fetch(`/kb/history?kb_name=${currentKbName}`);
+                const result = await response.json();
+                if (result.success) {
+                    displaySearchHistory(result.history);
+                } else {
+                    showMessage(i18n('historyFail', {error: result.error}), 'danger');
+                }
+            } catch (error) {
+                showMessage(i18n('requestFail', {error: error.message}), 'danger');
+            }
+        }
+        // 显示搜索历史
+        function displaySearchHistory(history) {
+            const container = document.getElementById('searchResults');
+            if (history.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-history fa-3x mb-3"></i>
+                        <p>${i18n('noHistory')}</p>
+                    </div>
+                `;
+                return;
+            }
+            let html = `<h6 class="mb-3">${i18n('searchHistory')}</h6>`;
+            history.forEach((record, index) => {
+                const date = new Date(record.timestamp).toLocaleString();
+                html += `
+                    <div class="result-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">${record.query}</h6>
+                                <small class="text-muted">
+                                    ${i18n('time')}: ${date} | ${i18n('resultCount')}: ${record.result_count}
+                                </small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="useHistoryQuery('${record.query}')">
+                                ${i18n('use')}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+        // 使用历史查询
+        function useHistoryQuery(query) {
+            document.getElementById('searchQuery').value = query;
+            searchKnowledgeBase();
+        }
+        // 清空搜索历史
+        async function clearSearchHistory() {
+            if (!confirm(i18n('clearHistoryConfirm'))) return;
+            try {
+                const formData = new FormData();
+                formData.append('kb_name', currentKbName);
+                const response = await fetch('/kb/clear_history', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(i18n('clearHistorySuccess'), 'success');
+                } else {
+                    showMessage(i18n('clearHistoryFail', {error: result.error}), 'danger');
+                }
+            } catch (error) {
+                showMessage(i18n('requestFail', {error: error.message}), 'danger');
+            }
+        }
+        // 导出搜索结果
+        async function exportResults(format) {
+            const results = window.currentSearchResults;
+            if (!results || results.length === 0) {
+                showMessage(i18n('noExport'), 'warning');
+                return;
+            }
+            try {
+                const formData = new FormData();
+                formData.append('kb_name', currentKbName);
+                formData.append('results', JSON.stringify(results));
+                formData.append('format', format);
+                const response = await fetch('/kb/export_results', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(i18n('exportSuccess', {file: result.file_path}), 'success');
+                } else {
+                    showMessage(i18n('exportFail', {error: result.error}), 'danger');
+                }
+            } catch (error) {
+                showMessage(i18n('requestFail', {error: error.message}), 'danger');
+            }
+        }
+        // 显示搜索结果
+        function displaySearchResults(results) {
+            const container = document.getElementById('searchResults');
+            window.currentSearchResults = results;
+            if (results.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-search fa-3x mb-3"></i>
+                        <p>${i18n('noResult')}</p>
+                    </div>
+                `;
+                return;
+            }
+            let html = '';
+            results.forEach(function(result, index) {
+                const sourceBadge = result.source === 'hybrid' ? 'bg-success' : result.source === 'vector' ? 'bg-primary' : 'bg-info';
+                const sourceText = result.source === 'hybrid' ? i18n('hybrid') : result.source === 'vector' ? i18n('vector') : i18n('keyword');
+                html += `
+                    <div class="result-item mb-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">${result.content}</h6>
+                                <small class="text-muted">
+                                    <span class="badge ${sourceBadge}">${sourceText}</span>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+        // 切片参数配置相关函数
+        function toggleChunkConfig() {
+            const configArea = document.getElementById('chunkConfigArea');
+            const button = event.target;
+            
+            if (configArea.style.display === 'none') {
+                configArea.style.display = 'block';
+                button.innerHTML = '<i class="fas fa-eye-slash"></i> 隐藏参数配置';
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-outline-primary');
+            } else {
+                configArea.style.display = 'none';
+                button.innerHTML = '<i class="fas fa-cog"></i> 切片参数配置';
+                button.classList.remove('btn-outline-primary');
+                button.classList.add('btn-outline-secondary');
+            }
+        }
+        
+        function updateParameterVisibility() {
+            const splitMethod = document.getElementById('splitMethod').value;
+            
+            // 隐藏所有参数组
+            document.querySelectorAll('.parameter-group').forEach(group => {
+                group.style.display = 'none';
+            });
+            
+            // 显示对应的参数组
+            if (splitMethod === 'character') {
+                document.getElementById('characterParams').style.display = 'block';
+            } else if (splitMethod === 'sentence') {
+                document.getElementById('sentenceParams').style.display = 'block';
+            } else if (splitMethod === 'paragraph') {
+                document.getElementById('paragraphParams').style.display = 'block';
+            }
+        }
+        
+        async function loadConfigTemplate() {
+            const templateName = document.getElementById('configTemplate').value;
+            if (!templateName) return;
+            
+            try {
+                const response = await fetch('/kb/config_info');
+                const configInfo = await response.json();
+                
+                if (configInfo.recommended_configs && configInfo.recommended_configs[templateName]) {
+                    const config = configInfo.recommended_configs[templateName];
+                    applyConfigToForm(config);
+                    showMessage(i18n('loadConfigSuccess', {template: templateName}), 'success');
+                }
+            } catch (error) {
+                showMessage(i18n('loadConfigFail', {error: error.message}), 'warning');
+            }
+        }
+        
+        function applyConfigToForm(config) {
+            // 设置切片方式
+            if (config.split_method) {
+                document.getElementById('splitMethod').value = config.split_method;
+                updateParameterVisibility();
+            }
+            
+            // 设置字符数切片参数
+            if (config.chunk_size) document.getElementById('chunkSize').value = config.chunk_size;
+            if (config.chunk_overlap) document.getElementById('chunkOverlap').value = config.chunk_overlap;
+            
+            // 设置句子切片参数
+            if (config.max_sentences_per_chunk) document.getElementById('maxSentencesPerChunk').value = config.max_sentences_per_chunk;
+            
+            // 设置段落切片参数
+            if (config.min_paragraph_length) document.getElementById('minParagraphLength').value = config.min_paragraph_length;
+            if (config.max_paragraph_length) document.getElementById('maxParagraphLength').value = config.max_paragraph_length;
+            if (config.paragraph_separator) document.getElementById('paragraphSeparator').value = config.paragraph_separator;
+            
+            // 设置通用过滤参数
+            if (config.min_chunk_length) document.getElementById('minChunkLength').value = config.min_chunk_length;
+            if (config.max_chunk_length) document.getElementById('maxChunkLength').value = config.max_chunk_length;
+            if (config.remove_empty_chunks !== undefined) document.getElementById('removeEmptyChunks').checked = config.remove_empty_chunks;
+            if (config.remove_whitespace_only !== undefined) document.getElementById('removeWhitespaceOnly').checked = config.remove_whitespace_only;
+            
+            // 设置高级参数
+            if (config.smart_split !== undefined) document.getElementById('smartSplit').checked = config.smart_split;
+            if (config.preserve_formatting !== undefined) document.getElementById('preserveFormatting').checked = config.preserve_formatting;
+            if (config.merge_short_chunks !== undefined) document.getElementById('mergeShortChunks').checked = config.merge_short_chunks;
+            if (config.merge_threshold) document.getElementById('mergeThreshold').value = config.merge_threshold;
+        }
+        
+        // 清空知识库
+        async function clearKnowledgeBase() {
+            if (!confirm(i18n('clearConfirm'))) return;
+            showLoading(i18n('clearing'));
+            try {
+                const formData = new FormData();
+                formData.append('kb_name', currentKbName);
+                const response = await fetch('/kb/clear', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(i18n('clearSuccess'), 'success');
+                    setTimeout(() => { window.location.reload(); }, 1000);
+                } else {
+                    showMessage(i18n('clearFail', {error: result.error}), 'danger');
+                }
+            } catch (error) {
+                showMessage(i18n('requestFail', {error: error.message}), 'danger');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // 回车搜索
+        document.getElementById('searchQuery').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') searchKnowledgeBase();
+        });
+    </script>
+    <script>
+    async function resetChunkConfigToDefault() {
+        try {
+            const response = await fetch('/kb/config_info');
+            const configInfo = await response.json();
+            if (configInfo.default_config) {
+                applyConfigToForm(configInfo.default_config);
+                showMessage(i18n('resetConfigSuccess'), 'success');
+            } else {
+                showMessage(i18n('loadConfigFail', {error: '获取默认参数失败'}), 'danger');
+            }
+        } catch (error) {
+            showMessage(i18n('requestFail', {error: error.message}), 'danger');
+        }
+    }
+    // 检索参数恢复默认逻辑
+    function resetRetrievalConfigToDefault() {
+        // 默认参数与说明（与后端utils/config.py保持一致）
+        // top_k: 5, similarity_threshold: 0.1, deduplication: true, retrieval_strategy: 'cosine', context_window: 1
+        document.getElementById('topK').value = 5;
+        document.getElementById('useEnhanced').checked = true; // 混合检索默认启用
+        // 检索策略
+        const strategySelect = document.getElementById('searchType');
+        if (strategySelect) strategySelect.value = 'enhanced';
+        // 其它参数如有扩展可在此补充
+        showMessage(i18n('resetRetrievalSuccess'), 'info'); // 中文提示
+    }
+    </script>
+    <script>
+    // 参数实时校验与错误提示
+    function validateInput(input, min, max, msg) {
+        const value = parseFloat(input.value);
+        const errorDiv = input.nextElementSibling && input.nextElementSibling.classList.contains('invalid-feedback') ? input.nextElementSibling : null;
+        if (isNaN(value) || value < min || value > max) {
+            input.classList.add('is-invalid');
+            if (errorDiv) errorDiv.textContent = msg;
+            else {
+                const div = document.createElement('div');
+                div.className = 'invalid-feedback';
+                div.textContent = msg;
+                input.parentNode.appendChild(div);
+            }
+            return false;
+        } else {
+            input.classList.remove('is-invalid');
+            if (errorDiv) errorDiv.textContent = '';
+            return true;
+        }
+    }
+    // 绑定校验事件
+    function bindValidation() {
+        // 最小块长度
+        const minChunk = document.getElementById('minChunkLength');
+        if (minChunk) minChunk.addEventListener('input', function() {
+            validateInput(this, 5, 100, i18n('minChunkLengthMsg'));
+        });
+        // 最大块长度
+        const maxChunk = document.getElementById('maxChunkLength');
+        if (maxChunk) maxChunk.addEventListener('input', function() {
+            validateInput(this, 1000, 5000, i18n('maxChunkLengthMsg'));
+        });
+        // 块大小
+        const chunkSize = document.getElementById('chunkSize');
+        if (chunkSize) chunkSize.addEventListener('input', function() {
+            validateInput(this, 100, 3000, i18n('chunkSizeMsg'));
+        });
+        // 合并阈值
+        const mergeThreshold = document.getElementById('mergeThreshold');
+        if (mergeThreshold) mergeThreshold.addEventListener('input', function() {
+            validateInput(this, 0.1, 0.8, i18n('mergeThresholdMsg'));
+        });
+        // topK
+        const topK = document.getElementById('topK');
+        if (topK) topK.addEventListener('input', function() {
+            validateInput(this, 1, 20, i18n('topKMsg'));
+        });
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        // 启用所有tooltip
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+            new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        // 绑定参数校验
+        bindValidation();
+    });
+    </script>
+    <script>
+    // 页面加载后根据语言切换主要文本
+    function updateKbI18n() {
+        setLang(currentLang);
+        // 可根据需要补充更多id的文本替换
+        // 切换语言时动态更新 tooltip 和说明文本
+        document.getElementById('i18n-split-method-tip').title = i18nDict[currentLang].splitMethodTip;
+        document.getElementById('i18n-split-method-desc').textContent = i18nDict[currentLang].splitMethodTip;
+        // 配置模板 tooltip
+        document.getElementById('i18n-config-template-tip').title = i18nDict[currentLang].configTemplateTip;
+        document.getElementById('i18n-config-template-desc').textContent = i18nDict[currentLang].configTemplateTip;
+        // 最小块长度 tooltip
+        document.getElementById('i18n-min-chunk-tip').title = i18nDict[currentLang].minChunkTip;
+        document.getElementById('i18n-min-chunk-desc').textContent = i18nDict[currentLang].minChunkTip;
+        // 最大块长度 tooltip
+        document.getElementById('i18n-max-chunk-tip').title = i18nDict[currentLang].maxChunkTip;
+        document.getElementById('i18n-max-chunk-desc').textContent = i18nDict[currentLang].maxChunkTip;
+        // 其它参数说明可继续补充
+    }
+    document.addEventListener('DOMContentLoaded', updateKbI18n);
+    </script>
+</body>
+</html> 
