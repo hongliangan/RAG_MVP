@@ -70,6 +70,7 @@ class KnowledgeBase:
         file_path: str,
         chunk_config: Optional[Dict] = None,
         processor_config: Optional[Dict] = None,
+        embedding_provider: Optional[str] = None,
     ) -> Dict:
         """
         添加文档到知识库
@@ -77,6 +78,7 @@ class KnowledgeBase:
         :param file_path: 文档路径
         :param chunk_config: 文本切片配置，支持文档级别的参数调整
         :param processor_config: 预处理器配置
+        :param embedding_provider: 指定 embedding 方式（local/online），None 表示跟随全局
         :return: 添加结果信息
         """
         if not os.path.exists(file_path):
@@ -117,6 +119,9 @@ class KnowledgeBase:
             )
             chunks = doc_result["chunks"]
 
+            if not chunks:
+                return {"success": False, "error": "文档分段失败，未提取到有效内容", "filename": original_filename}
+
             print(
                 f"[knowledge_base] 文档预处理完成，格式: {doc_result.get('format', 'unknown')}"
             )
@@ -126,13 +131,29 @@ class KnowledgeBase:
             )
 
             # 3. 向量化文档
-            embeddings = embed_documents(chunks)
+            # 如果指定 embedding_provider，则临时 patch config
+            if embedding_provider:
+                from unittest.mock import patch
+                from rag_core import embedding as embedding_mod
+                with patch("utils.config.get_embedding_config") as mock_get_config:
+                    import utils.config as config_mod
+                    provider, config = config_mod.get_embedding_config()
+                    # 用指定 provider 替换
+                    if embedding_provider == "local":
+                        provider = "local"
+                    elif embedding_provider == "online":
+                        provider = "online"
+                    mock_get_config.return_value = (provider, config_mod.load_global_config().get("embedding_configs", {}).get(provider, {}))
+                    embeddings = embedding_mod.embed_documents(chunks)
+            else:
+                embeddings = embed_documents(chunks)
             print(f"[knowledge_base] 向量化完成，共 {len(embeddings)} 个向量")
 
             # 4. 存储到向量数据库（数据库filename字段始终用原始名）
-            document_id = self.vector_store.add_document(
+            result_or_id = self.vector_store.add_document(
                 str(dest_path), chunks, embeddings, filename=original_filename
             )
+            document_id = result_or_id
 
             # 5. 获取文档信息
             doc_info = self.vector_store.get_document_info(document_id)
@@ -161,8 +182,13 @@ class KnowledgeBase:
             )
             return result
 
+        except RuntimeError as e:
+            # 捕获 embedding 维度变更自动清空的提示
+            return {"success": False, "error": str(e), "filename": original_filename}
         except Exception as e:
-            print(f"[knowledge_base] 文档添加失败: {e}")
+            import traceback
+            print(f"[knowledge_base] 文档添加失败: {repr(e)}")
+            traceback.print_exc()
             # 清理已复制的文件
             if dest_path.exists():
                 dest_path.unlink()
@@ -382,6 +408,9 @@ class KnowledgeBase:
             if self.documents_path.exists():
                 shutil.rmtree(self.documents_path)
                 self.documents_path.mkdir(parents=True, exist_ok=True)
+
+            # 新增：重建 VectorStore 实例，确保内存索引与磁盘同步
+            self.vector_store = VectorStore(str(self.vectors_path / "vector_store.db"))
 
             print(f"[knowledge_base] 知识库已清空: {self.kb_name}")
             return True

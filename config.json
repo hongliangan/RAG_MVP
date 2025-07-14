@@ -1,0 +1,23 @@
+{
+  "embedding_configs": {
+    "local": {
+      "model_path": "./models/embedding"
+    },
+    "online": {
+      "api_key": "",
+      "api_url": "https://api.siliconflow.cn/v1/embeddings",
+      "model_name": "BAAI/bge-large-zh-v1.5"
+    }
+  },
+  "embedding_provider": "local",
+  "llm_configs": {
+    "openai": {
+      "api_key": "sk-xxx",
+      "api_url": "https://api.openai.com/v1/chat/completions",
+      "model_name": "gpt-3.5-turbo"
+    }
+  },
+  "llm_provider": "openai",
+  "local_model_dir": "./models",
+  "prefer_local_model": true
+}

@@ -33,23 +33,12 @@ class VectorStore:
     """
 
     def __init__(self, db_path: str = "knowledge_base/vectors/vector_store.db"):
-        """
-        初始化向量存储引擎
-
-        :param db_path: SQLite数据库路径
-        """
         self.db_path = db_path
         self.vectors_path = os.path.join(os.path.dirname(db_path), "embeddings.npy")
         self.index_path = os.path.join(os.path.dirname(db_path), "faiss_index.pkl")
-
-        # 确保目录存在
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-
-        # 初始化数据库
         self._init_database()
-
-        # 加载或创建向量索引
-        self._load_or_create_index()
+        self.index = None  # 不在这里初始化索引
 
     def _init_database(self):
         """初始化SQLite数据库表结构"""
@@ -112,16 +101,14 @@ class VectorStore:
                 print(f"[vector_store] 加载FAISS索引: {self.index_path}")
             except Exception as e:
                 print(f"[vector_store] 加载索引失败，创建新索引: {e}")
-                self._create_new_index()
+                self._create_new_index(dimension=384) # 默认维度
         else:
-            self._create_new_index()
+            self._create_new_index(dimension=384) # 默认维度
 
-    def _create_new_index(self):
-        """创建新的FAISS索引"""
+    def _create_new_index(self, dimension):
+        """创建新的FAISS索引，必须指定维度"""
         if FAISS_AVAILABLE:
-            # 创建IVFFlat索引，适合小到中等规模数据集
-            dimension = 384  # 默认维度，后续可动态调整
-            self.index = faiss.IndexFlatIP(dimension)  # 内积索引，用于余弦相似度
+            self.index = faiss.IndexFlatL2(dimension)
             print(f"[vector_store] 创建新FAISS索引，维度: {dimension}")
         else:
             self.index = None
@@ -134,21 +121,35 @@ class VectorStore:
         embeddings: List[List[float]],
         filename: Optional[str] = None,
     ) -> int:
-        """
-        添加文档到知识库
-
-        :param file_path: 文档路径
-        :param chunks: 文档分块列表
-        :param embeddings: 对应的向量列表
-        :param filename: 原始文件名（可选，优先使用）
-        :return: 文档ID
-        """
+        self._init_database()  # 再次确保表结构存在
         if len(chunks) != len(embeddings):
             raise ValueError("文档块数量与向量数量不匹配")
 
+        embedding_dim = len(embeddings[0]) if embeddings else 0
+        dim_file = os.path.join(os.path.dirname(self.db_path), 'embedding_dim.txt')
+
+        # 1. 维度校验，未通过则立即 raise 并 return
+        if not os.path.exists(dim_file):
+            with open(dim_file, 'w') as f:
+                f.write(str(embedding_dim))
+            self._create_new_index(embedding_dim)  # 用当前 embedding_dim 初始化索引
+        else:
+            with open(dim_file, 'r') as f:
+                recorded_dim = int(f.read().strip())
+            if embedding_dim != recorded_dim:
+                print(f"[vector_store] 检测到 embedding 维度变更（原: {recorded_dim}, 新: {embedding_dim}），自动清空知识库！")
+                db_dir = os.path.dirname(self.db_path)
+                for fname in [self.db_path, dim_file, self.index_path, self.vectors_path]:
+                    if os.path.exists(fname):
+                        os.remove(fname)
+                with open(dim_file, 'w') as f:
+                    f.write(str(embedding_dim))
+                self._create_new_index(embedding_dim)
+                raise RuntimeError(f"检测到 embedding 维度变更（原: {recorded_dim}, 新: {embedding_dim}），已自动清空知识库，请重新上传文档！")
+
+        # 2. 只有维度一致时才执行数据库和索引操作
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-
             # 1. 添加文档记录
             db_filename = filename if filename else os.path.basename(file_path)
             file_type = os.path.splitext(db_filename)[1].lower()
@@ -158,7 +159,7 @@ class VectorStore:
                 """
                 INSERT INTO documents (filename, file_path, file_type, file_size)
                 VALUES (?, ?, ?, ?)
-            """,
+                """,
                 (db_filename, file_path, file_type, file_size),
             )
 
@@ -172,7 +173,7 @@ class VectorStore:
                     """
                     INSERT INTO chunks (document_id, chunk_index, content, chunk_size)
                     VALUES (?, ?, ?, ?)
-                """,
+                    """,
                     (document_id, i, chunk, len(chunk)),
                 )
 
@@ -184,15 +185,14 @@ class VectorStore:
                     """
                     INSERT INTO vectors (chunk_id, vector_index, vector_dim)
                     VALUES (?, ?, ?)
-                """,
+                    """,
                     (chunk_id, i, len(embedding)),
                 )
 
             conn.commit()
 
-        # 4. 更新向量索引
+        # 3. 更新向量索引
         self._update_index(embeddings)
-
         print(
             f"[vector_store] 成功添加文档: {db_filename}，包含 {len(chunks)} 个文本块"
         )
@@ -207,6 +207,8 @@ class VectorStore:
         vectors = np.array(embeddings, dtype=np.float32)
 
         # 添加到索引
+        if vectors.shape[1] != self.index.d:
+            raise RuntimeError(f"FAISS 索引维度为 {self.index.d}，但本次入库向量为 {vectors.shape[1]} 维，维度不一致！")
         self.index.add(vectors)
 
         # 保存索引

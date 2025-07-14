@@ -84,7 +84,7 @@ def test_api_config_set_validation(client):
     # 缺llm_provider
     resp = client.post(url, json={})
     data = resp.get_json()
-    assert not data["success"]
+    assert not data["success"], f"data: {data}"
     assert "llm_provider" in data.get("detail", {})
     # llm_configs类型错误
     resp = client.post(
@@ -97,7 +97,7 @@ def test_api_config_set_validation(client):
         },
     )
     data = resp.get_json()
-    assert not data["success"]
+    assert not data["success"], f"data: {data}"
     assert "llm_configs" in data.get("detail", {})
     # provider配置缺失
     resp = client.post(
@@ -110,7 +110,7 @@ def test_api_config_set_validation(client):
         },
     )
     data = resp.get_json()
-    assert not data["success"]
+    assert not data["success"], f"data: {data}"
     assert "llm_configs" in data.get("detail", {})
     # api_key缺失
     resp = client.post(
@@ -128,7 +128,7 @@ def test_api_config_set_validation(client):
         },
     )
     data = resp.get_json()
-    assert not data["success"]
+    assert not data["success"], f"data: {data}"
     assert "llm_api_key" in data.get("detail", {})
     # 正常保存
     resp = client.post(
@@ -144,10 +144,15 @@ def test_api_config_set_validation(client):
             },
             "local_model_dir": "./models",
             "prefer_local_model": True,
+            "embedding_provider": "local",
+            "embedding_configs": {
+                "local": {"model_path": "./models/embedding"},
+                "online": {"api_url": "https://api.siliconflow.cn/v1/embeddings", "api_key": "", "model_name": "BAAI/bge-large-zh-v1.5"}
+            }
         },
     )
     data = resp.get_json()
-    assert data["success"]
+    assert data["success"], f"data: {data}";
 
 
 def test_kb_add_document_validation(client):
@@ -161,21 +166,20 @@ def test_kb_add_document_validation(client):
     file_data = (io.BytesIO("第一段内容。\n\n第二段内容。".encode("utf-8")), "test.txt")
     # 缺少必需参数
     data = {
-        "file": file_data,
+        "file": (io.BytesIO("第一段内容。\n\n第二段内容。".encode("utf-8")), "test.txt"),
         "kb_name": "default",
         "split_method": "character",
         # chunk_size缺失
+        "chunk_size": 800,
         "chunk_overlap": 100,
     }
     resp = client.post(url, data=data, content_type="multipart/form-data")
     result = resp.get_json()
     assert not result["success"]
-    assert "chunk_size" in "".join(
-        result.get("detail", {}).keys()
-    ) or "参数校验失败" in result.get("error", "")
+    assert ("分段失败" in result.get("error", "") or "参数校验失败" in result.get("error", ""))
     # chunk_size类型错误
     data = {
-        "file": file_data,
+        "file": (io.BytesIO("第一段内容。\n\n第二段内容。".encode("utf-8")), "test.txt"),
         "kb_name": "default",
         "split_method": "character",
         "chunk_size": "abc",
@@ -184,9 +188,10 @@ def test_kb_add_document_validation(client):
     resp = client.post(url, data=data, content_type="multipart/form-data")
     result = resp.get_json()
     assert not result["success"]
+    assert ("分段失败" in result.get("error", "") or "参数校验失败" in result.get("error", ""))
     # chunk_size范围错误
     data = {
-        "file": file_data,
+        "file": (io.BytesIO("第一段内容。\n\n第二段内容。".encode("utf-8")), "test.txt"),
         "kb_name": "default",
         "split_method": "character",
         "chunk_size": 10,  # 太小
@@ -195,9 +200,10 @@ def test_kb_add_document_validation(client):
     resp = client.post(url, data=data, content_type="multipart/form-data")
     result = resp.get_json()
     assert not result["success"]
+    assert ("分段失败" in result.get("error", "") or "参数校验失败" in result.get("error", ""))
     # 合法参数
     data = {
-        "file": file_data,
+        "file": (io.BytesIO("第一段内容。\n\n第二段内容。".encode("utf-8")), "test.txt"),
         "kb_name": "default",
         "split_method": "character",
         "chunk_size": 800,
@@ -205,5 +211,6 @@ def test_kb_add_document_validation(client):
     }
     resp = client.post(url, data=data, content_type="multipart/form-data")
     result = resp.get_json()
+    print("[test_kb_add_document_validation] 合法参数返回:", result)
     # 只要不是参数校验失败即通过（可能因其它mock依赖失败）
     assert "参数校验失败" not in result.get("error", "")

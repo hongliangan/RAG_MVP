@@ -74,6 +74,35 @@
                 </label>
             </div>
             <div class="mb-3">
+                <label for="embedding_provider" class="form-label">Embedding 方式
+                    <i class="fas fa-info-circle text-secondary ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="选择文本向量化方式。"></i>
+                </label>
+                <select class="form-select" id="embedding_provider" name="embedding_provider" onchange="toggleEmbeddingConfig()">
+                    <option value="local">本地</option>
+                    <option value="online">在线（SiliconFlow）</option>
+                </select>
+            </div>
+            <div id="embedding_local_config">
+                <div class="mb-3">
+                    <label for="embedding_local_model_path" class="form-label">本地Embedding模型路径</label>
+                    <input type="text" class="form-control" id="embedding_local_model_path" name="embedding_local_model_path" placeholder="如 ./models/embedding">
+                </div>
+            </div>
+            <div id="embedding_online_config" style="display:none;">
+                <div class="mb-3">
+                    <label for="embedding_api_url" class="form-label">Embedding API地址</label>
+                    <input type="text" class="form-control" id="embedding_api_url" name="embedding_api_url" placeholder="如 https://api.siliconflow.cn/v1/embeddings">
+                </div>
+                <div class="mb-3">
+                    <label for="embedding_api_key" class="form-label">Embedding API Key</label>
+                    <input type="text" class="form-control" id="embedding_api_key" name="embedding_api_key" placeholder="请输入API Key">
+                </div>
+                <div class="mb-3">
+                    <label for="embedding_model_name" class="form-label">Embedding模型名</label>
+                    <input type="text" class="form-control" id="embedding_model_name" name="embedding_model_name" placeholder="如 BAAI/bge-large-zh-v1.5">
+                </div>
+            </div>
+            <div class="mb-3">
                 <button type="button" class="btn btn-primary me-2" id="i18n-save" onclick="saveGlobalConfig()">保存设置</button>
                 <button type="button" class="btn btn-outline-warning me-2" id="i18n-restore" onclick="loadGlobalConfig()">恢复已保存</button>
                 <button type="button" class="btn btn-outline-secondary" id="i18n-reset" onclick="resetGlobalConfigToDefault()">恢复默认</button>
@@ -92,6 +121,12 @@
             new bootstrap.Tooltip(tooltipTriggerEl);
         });
     });
+    // Embedding 配置切换
+    function toggleEmbeddingConfig() {
+        var provider = document.getElementById('embedding_provider').value;
+        document.getElementById('embedding_local_config').style.display = (provider === 'local') ? '' : 'none';
+        document.getElementById('embedding_online_config').style.display = (provider === 'online') ? '' : 'none';
+    }
     // 加载全局配置
     function loadGlobalConfig() {
         fetch('/api/config/get').then(r => r.json()).then(res => {
@@ -106,6 +141,16 @@
                 document.getElementById('api_url').value = llm_cfg.api_url || '';
                 document.getElementById('local_model_dir').value = cfg.local_model_dir || './models';
                 document.getElementById('prefer_local_model').checked = !!cfg.prefer_local_model;
+                // Embedding 配置
+                document.getElementById('embedding_provider').value = cfg.embedding_provider || 'local';
+                toggleEmbeddingConfig();
+                let emb_cfgs = cfg.embedding_configs || {};
+                let local_cfg = emb_cfgs.local || {};
+                let online_cfg = emb_cfgs.online || {};
+                document.getElementById('embedding_local_model_path').value = local_cfg.model_path || './models/embedding';
+                document.getElementById('embedding_api_url').value = online_cfg.api_url || 'https://api.siliconflow.cn/v1/embeddings';
+                document.getElementById('embedding_api_key').value = online_cfg.api_key || '';
+                document.getElementById('embedding_model_name').value = online_cfg.model_name || 'BAAI/bge-large-zh-v1.5';
                 showConfigMsg('已加载当前配置', 'info');
             } else {
                 showConfigMsg('加载失败: ' + res.error, 'danger');
@@ -115,11 +160,23 @@
     // 保存全局配置
     function saveGlobalConfig() {
         const provider = document.getElementById('llm_provider').value;
+        const embedding_provider = document.getElementById('embedding_provider').value;
         const config = {
             llm_provider: provider,
             llm_configs: {},
             local_model_dir: document.getElementById('local_model_dir').value,
-            prefer_local_model: document.getElementById('prefer_local_model').checked
+            prefer_local_model: document.getElementById('prefer_local_model').checked,
+            embedding_provider: embedding_provider,
+            embedding_configs: {
+                local: {
+                    model_path: document.getElementById('embedding_local_model_path').value
+                },
+                online: {
+                    api_url: document.getElementById('embedding_api_url').value,
+                    api_key: document.getElementById('embedding_api_key').value,
+                    model_name: document.getElementById('embedding_model_name').value
+                }
+            }
         };
         config.llm_configs[provider] = {
             api_key: document.getElementById('llm_api_key').value,
@@ -149,6 +206,11 @@
                         else if (field === 'llm_provider') input = document.getElementById('llm_provider');
                         else if (field === 'local_model_dir') input = document.getElementById('local_model_dir');
                         else if (field === 'prefer_local_model') input = document.getElementById('prefer_local_model');
+                        else if (field === 'embedding_provider') input = document.getElementById('embedding_provider');
+                        else if (field === 'embedding_local_model_path') input = document.getElementById('embedding_local_model_path');
+                        else if (field === 'embedding_api_url') input = document.getElementById('embedding_api_url');
+                        else if (field === 'embedding_api_key') input = document.getElementById('embedding_api_key');
+                        else if (field === 'embedding_model_name') input = document.getElementById('embedding_model_name');
                         if (input) input.classList.add('is-invalid');
                     }
                     showConfigMsg(msg, 'danger');
@@ -166,6 +228,11 @@
         document.getElementById('api_url').value = 'https://api.siliconflow.cn/v1/chat/completions';
         document.getElementById('local_model_dir').value = './models';
         document.getElementById('prefer_local_model').checked = false;
+        document.getElementById('embedding_provider').value = 'local';
+        document.getElementById('embedding_local_model_path').value = './models/embedding';
+        document.getElementById('embedding_api_url').value = 'https://api.siliconflow.cn/v1/embeddings';
+        document.getElementById('embedding_api_key').value = '';
+        document.getElementById('embedding_model_name').value = 'BAAI/bge-large-zh-v1.5';
         showConfigMsg('已恢复为推荐默认值（需保存后生效）', 'info');
     }
     // 操作提示

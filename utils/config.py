@@ -118,8 +118,19 @@ def load_global_config():
             "llm_provider": LLM_PROVIDER,
             "llm_configs": LLM_CONFIGS,
             "local_model_dir": os.getenv("LOCAL_MODEL_DIR", "./models"),
-            "prefer_local_model": os.getenv("PREFER_LOCAL_MODEL", "false").lower()
-            == "true",
+            "prefer_local_model": os.getenv("PREFER_LOCAL_MODEL", "false").lower() == "true",
+            # 新增 embedding 配置
+            "embedding_provider": os.getenv("EMBEDDING_PROVIDER", "local"),
+            "embedding_configs": {
+                "local": {
+                    "model_path": os.getenv("LOCAL_EMBEDDING_MODEL_PATH", "./models/embedding")
+                },
+                "online": {
+                    "api_key": os.getenv("SILICONFLOW_API_KEY", ""),
+                    "model_name": os.getenv("SILICONFLOW_EMBEDDING_MODEL", "BAAI/bge-large-zh-v1.5"),
+                    "api_url": os.getenv("SILICONFLOW_EMBEDDING_API_URL", "https://api.siliconflow.cn/v1/embeddings")
+                }
+            }
         }
 
 
@@ -170,3 +181,16 @@ def get_retrieval_params():
     global_config = load_global_config()
     # 可扩展：如有检索参数存储在config.json则优先取，否则用默认
     return global_config.get("retrieval_config", RETRIEVAL_CONFIG)
+
+
+def get_embedding_config():
+    """
+    获取当前选定 embedding 服务的配置（始终读取最新config.json）。
+    :return: dict，包含 embedding 相关参数
+    """
+    global_config = load_global_config()
+    provider = global_config.get("embedding_provider", "local")
+    embedding_configs = global_config.get("embedding_configs", {})
+    config = embedding_configs.get(provider, {})
+    print(f"[config] 当前EMBEDDING_PROVIDER: {provider}, model: {config.get('model_name', config.get('model_path', ''))}")
+    return provider, config

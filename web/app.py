@@ -217,6 +217,11 @@ def kb_add_document():
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(file_path)
 
+        # 读取 embedding_provider 参数
+        embedding_provider = request.form.get("embedding_provider", "")
+        if not embedding_provider:
+            embedding_provider = None  # 跟随全局
+
         # 解析切片配置参数
         chunk_config = {}
         split_method = request.form.get("split_method", "paragraph")
@@ -281,7 +286,7 @@ def kb_add_document():
 
         # 添加到知识库
         kb = create_knowledge_base(kb_name)
-        result = kb.add_document(file_path, chunk_config=chunk_config)
+        result = kb.add_document(file_path, chunk_config=chunk_config, embedding_provider=embedding_provider)
 
         # 清理临时文件
         if os.path.exists(file_path):
@@ -810,6 +815,18 @@ def config_page():
 def api_get_config():
     """获取全局配置"""
     config = load_global_config()
+    # 确保 embedding_provider 和 embedding_configs 字段存在
+    if "embedding_provider" not in config:
+        config["embedding_provider"] = "local"
+    if "embedding_configs" not in config:
+        config["embedding_configs"] = {
+            "local": {"model_path": "./models/embedding"},
+            "online": {
+                "api_url": "https://api.siliconflow.cn/v1/embeddings",
+                "api_key": "",
+                "model_name": "BAAI/bge-large-zh-v1.5"
+            }
+        }
     return jsonify({"success": True, "config": config})
 
 
@@ -818,8 +835,10 @@ def api_set_config():
     """保存全局配置"""
     try:
         data = request.get_json()
+        print("[api_set_config] received data:", data)
         # 简单校验字段
         if not isinstance(data, dict):
+            print("[api_set_config] error: 参数格式错误")
             return jsonify({"success": False, "error": "参数格式错误"})
         errors = {}
         # 校验llm_provider
@@ -850,15 +869,42 @@ def api_set_config():
             data["prefer_local_model"], bool
         ):
             errors["prefer_local_model"] = ["prefer_local_model必须为布尔值"]
+        # 校验 embedding_provider
+        if not data.get("embedding_provider") or not isinstance(data["embedding_provider"], str):
+            errors["embedding_provider"] = ["Embedding方式不能为空，且必须为字符串"]
+        # 校验 embedding_configs
+        if "embedding_configs" not in data or not isinstance(data["embedding_configs"], dict):
+            errors["embedding_configs"] = ["embedding_configs必须为字典"]
+        else:
+            emb_cfgs = data["embedding_configs"]
+            # 本地 embedding 校验
+            if "local" not in emb_cfgs or not isinstance(emb_cfgs["local"], dict):
+                errors["embedding_local_model_path"] = ["本地embedding配置缺失"]
+            else:
+                if not emb_cfgs["local"].get("model_path"):
+                    errors["embedding_local_model_path"] = ["本地模型路径不能为空"]
+            # 在线 embedding 校验
+            if "online" not in emb_cfgs or not isinstance(emb_cfgs["online"], dict):
+                errors["embedding_api_url"] = ["在线embedding配置缺失"]
+            else:
+                online_cfg = emb_cfgs["online"]
+                if not online_cfg.get("api_url"):
+                    errors["embedding_api_url"] = ["API地址不能为空"]
+                if not online_cfg.get("model_name"):
+                    errors["embedding_model_name"] = ["模型名不能为空"]
+                # api_key 可为空
+        print("[api_set_config] errors:", errors)
         if errors:
             return jsonify(
                 {"success": False, "error": "参数校验失败", "detail": errors}
             )
         save_global_config(data)
+        print("[api_set_config] config saved successfully.")
         return jsonify({"success": True})
     except Exception as e:
+        print("[api_set_config] exception:", e)
         return jsonify({"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=8080)

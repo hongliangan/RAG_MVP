@@ -88,5 +88,47 @@
     "timestamp": "2025-07-08T15:51:39.086502",
     "result_count": 3,
     "query_hash": "ecf36b0061da6ca9cef5bb91ab78577d"
+  },
+  {
+    "query": "民航二所数字化水平怎么样？",
+    "timestamp": "2025-07-08T16:37:55.624540",
+    "result_count": 0,
+    "query_hash": "ae12f02543d350cfabba1c8dc6dbdce7"
+  },
+  {
+    "query": "aa",
+    "timestamp": "2025-07-08T19:22:47.951072",
+    "result_count": 4,
+    "query_hash": "4124bc0a9335c27f086f24ba207a4912"
+  },
+  {
+    "query": "xray",
+    "timestamp": "2025-07-14T11:55:21.236179",
+    "result_count": 5,
+    "query_hash": "32599e5387251a477e16894dca7417bf"
+  },
+  {
+    "query": "xray是什么？",
+    "timestamp": "2025-07-14T11:55:36.772283",
+    "result_count": 3,
+    "query_hash": "ecf36b0061da6ca9cef5bb91ab78577d"
+  },
+  {
+    "query": "xray",
+    "timestamp": "2025-07-14T12:00:44.370045",
+    "result_count": 5,
+    "query_hash": "32599e5387251a477e16894dca7417bf"
+  },
+  {
+    "query": "xray",
+    "timestamp": "2025-07-14T12:02:22.003582",
+    "result_count": 5,
+    "query_hash": "32599e5387251a477e16894dca7417bf"
+  },
+  {
+    "query": "xray",
+    "timestamp": "2025-07-14T12:04:16.191079",
+    "result_count": 5,
+    "query_hash": "32599e5387251a477e16894dca7417bf"
   }
 ]

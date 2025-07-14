@@ -49,12 +49,12 @@ class DocumentProcessor:
         :return: 处理结果字典
         """
         try:
-            file_path = Path(file_path)
-            if not file_path.exists():
+            file_path_obj = Path(file_path)
+            if not file_path_obj.exists():
                 raise FileNotFoundError(f"文件不存在: {file_path}")
 
             # 获取文件扩展名
-            ext = file_path.suffix.lower()
+            ext = file_path_obj.suffix.lower()
 
             # 检查是否支持该格式
             if ext not in self.supported_formats:
@@ -66,9 +66,9 @@ class DocumentProcessor:
 
             # 添加元数据
             result["metadata"] = {
-                "file_path": str(file_path),
-                "file_name": file_path.name,
-                "file_size": file_path.stat().st_size,
+                "file_path": str(file_path_obj),
+                "file_name": file_path_obj.name,
+                "file_size": file_path_obj.stat().st_size,
                 "file_extension": ext,
                 "processing_time": result.get("processing_time", 0),
             }
@@ -349,29 +349,30 @@ class DocumentProcessor:
 
     def _clean_text(self, text: str) -> str:
         """
-        清理文本内容
-
+        清理文本内容（保留段落分隔符\n\n，仅合并多余空格和多余空行）
+        1. 合并多余空格（不影响换行）
+        2. 合并多余空行为两个换行，保留段落分隔符
+        3. 移除行首尾多余空格
+        4. 移除页眉页脚、特殊字符、重复内容、标准化标点
         :param text: 原始文本
         :return: 清理后的文本
         """
         if not text:
             return ""
-
-        # 移除多余的空白字符
-        text = re.sub(r"\s+", " ", text)
-
+        # 合并多余空格（不影响换行）
+        text = re.sub(r"[ \t]+", " ", text)
+        # 合并多余空行为两个换行，保留段落分隔符
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        # 移除行首尾多余空格
+        text = re.sub(r"^[ \t]+|[ \t]+$", "", text, flags=re.MULTILINE)
         # 移除页眉页脚（简单模式）
         text = self._remove_headers_footers(text)
-
         # 移除特殊字符
         text = self._remove_special_chars(text)
-
         # 标准化标点符号
         text = self._normalize_punctuation(text)
-
-        # 移除重复内容
+        # 移除重复内容（以段落为单位）
         text = self._remove_duplicates(text)
-
         return text.strip()
 
     def _remove_headers_footers(self, text: str) -> str:
@@ -426,18 +427,20 @@ class DocumentProcessor:
         return text
 
     def _remove_duplicates(self, text: str) -> str:
-        """移除重复内容"""
-        lines = text.split("\n")
+        """
+        以段落为单位去重，保留分段结构
+        :param text: 清洗后的文本
+        :return: 去重后的文本
+        """
+        paragraphs = text.split("\n\n")
         seen = set()
-        unique_lines = []
-
-        for line in lines:
-            line = line.strip()
-            if line and line not in seen:
-                seen.add(line)
-                unique_lines.append(line)
-
-        return "\n".join(unique_lines)
+        unique_paragraphs = []
+        for para in paragraphs:
+            para_stripped = para.strip()
+            if para_stripped and para_stripped not in seen:
+                seen.add(para_stripped)
+                unique_paragraphs.append(para_stripped)
+        return "\n\n".join(unique_paragraphs)
 
     def _remove_markdown_syntax(self, text: str) -> str:
         """移除Markdown语法"""
@@ -493,16 +496,16 @@ class DocumentProcessor:
     def get_document_info(self, file_path: str) -> Dict[str, Any]:
         """获取文档信息"""
         try:
-            file_path = Path(file_path)
-            if not file_path.exists():
+            file_path_obj = Path(file_path)
+            if not file_path_obj.exists():
                 return {"error": "文件不存在"}
 
-            ext = file_path.suffix.lower()
-            stats = file_path.stat()
+            ext = file_path_obj.suffix.lower()
+            stats = file_path_obj.stat()
 
             info = {
-                "file_name": file_path.name,
-                "file_path": str(file_path),
+                "file_name": file_path_obj.name,
+                "file_path": str(file_path_obj),
                 "file_size": stats.st_size,
                 "file_extension": ext,
                 "is_supported": ext in self.supported_formats,
